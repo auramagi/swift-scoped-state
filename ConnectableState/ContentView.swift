@@ -189,12 +189,12 @@ private struct ProductContainerDiagnostics: View {
 
 // MARK: - Demo scope and container
 
-nonisolated enum OrderState: String {
+enum OrderState: String {
     case inCart = "In cart"
     case notInCart = "Not in cart"
 }
 
-nonisolated enum PricingMode: String, CaseIterable, Identifiable {
+enum PricingMode: String, CaseIterable, Identifiable {
     case standard = "Standard"
     case member = "Member"
 
@@ -208,12 +208,12 @@ extension Bool {
     }
 }
 
-nonisolated struct ProductDetailInput: Equatable {
+struct ProductDetailInput: Equatable {
     var productID: Int
     var pricingMode: PricingMode
 }
 
-nonisolated struct ProductDetailSnapshot: Equatable {
+struct ProductDetailSnapshot: Equatable {
     let appContainerID: UUID
     let containerID: UUID
     let productID: Int

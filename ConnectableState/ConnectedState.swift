@@ -4,11 +4,11 @@ import SwiftUI
 
 // MARK: - Connection sources and sessions
 
-nonisolated protocol ConnectedStateScope {}
+protocol ConnectedStateScope {}
 
-private nonisolated final class ConnectedStateConnectionIdentity {}
+private final class ConnectedStateConnectionIdentity {}
 
-nonisolated enum ConnectedStateNoInput: Equatable {
+enum ConnectedStateNoInput: Equatable {
     case value
 }
 
@@ -34,18 +34,18 @@ struct ConnectedStateSession<Input: Equatable, Value> {
     }
 }
 
-nonisolated protocol ConnectedStateSourceProtocol: SendableMetatype {
+protocol ConnectedStateSourceProtocol: SendableMetatype {
     associatedtype Input: Equatable
     associatedtype Value
 
-    nonisolated var identity: ObjectIdentifier { get }
+    var identity: ObjectIdentifier { get }
 
     @MainActor
     func makeSession(input: Input) -> ConnectedStateSession<Input, Value>
 }
 
 /// A read-only connection which needs no external input.
-nonisolated struct ConnectedStateConnection<Value>: ConnectedStateSourceProtocol {
+struct ConnectedStateConnection<Value>: ConnectedStateSourceProtocol {
     typealias Input = ConnectedStateNoInput
 
     @MainActor private let getCurrentValue: @MainActor () -> Value
@@ -61,7 +61,7 @@ nonisolated struct ConnectedStateConnection<Value>: ConnectedStateSourceProtocol
         self.updates = updates
     }
 
-    nonisolated var identity: ObjectIdentifier {
+    var identity: ObjectIdentifier {
         ObjectIdentifier(identityToken)
     }
 
@@ -77,7 +77,7 @@ nonisolated struct ConnectedStateConnection<Value>: ConnectedStateSourceProtocol
 }
 
 /// A replaceable connection which needs no external input.
-nonisolated struct WritableConnectedStateConnection<Value>: ConnectedStateSourceProtocol {
+struct WritableConnectedStateConnection<Value>: ConnectedStateSourceProtocol {
     typealias Input = ConnectedStateNoInput
 
     @MainActor private let getCurrentValue: @MainActor () -> Value
@@ -96,7 +96,7 @@ nonisolated struct WritableConnectedStateConnection<Value>: ConnectedStateSource
         self.setValue = setValue
     }
 
-    nonisolated var identity: ObjectIdentifier {
+    var identity: ObjectIdentifier {
         ObjectIdentifier(identityToken)
     }
 
@@ -114,7 +114,7 @@ nonisolated struct WritableConnectedStateConnection<Value>: ConnectedStateSource
 
 /// An input-bearing connection recipe. The session it creates owns the resulting
 /// state until the SwiftUI location holding the session disappears.
-nonisolated struct ConnectedStateFactory<Input: Equatable, Value>:
+struct ConnectedStateFactory<Input: Equatable, Value>:
     ConnectedStateSourceProtocol
 {
     private let identityToken = ConnectedStateConnectionIdentity()
@@ -127,7 +127,7 @@ nonisolated struct ConnectedStateFactory<Input: Equatable, Value>:
         self.connect = connect
     }
 
-    nonisolated var identity: ObjectIdentifier {
+    var identity: ObjectIdentifier {
         ObjectIdentifier(identityToken)
     }
 
@@ -354,7 +354,7 @@ extension View {
 
 // MARK: - Connected state keys and projections
 
-nonisolated protocol ConnectedStateKeyProtocol {
+protocol ConnectedStateKeyProtocol {
     associatedtype Scope: ConnectedStateScope
     associatedtype Connection: ConnectedStateSourceProtocol
         where Connection.Input == ConnectedStateNoInput
@@ -366,7 +366,7 @@ nonisolated protocol ConnectedStateKeyProtocol {
     func projection(for node: ConnectionNode<Connection.Value>) -> Projection
 }
 
-nonisolated struct ReadOnlyConnectedStateKey<Scope: ConnectedStateScope, Value>:
+struct ReadOnlyConnectedStateKey<Scope: ConnectedStateScope, Value>:
     ConnectedStateKeyProtocol
 {
     typealias Connection = ConnectedStateConnection<Value>
@@ -383,7 +383,7 @@ nonisolated struct ReadOnlyConnectedStateKey<Scope: ConnectedStateScope, Value>:
     }
 }
 
-nonisolated struct WritableConnectedStateKey<Scope: ConnectedStateScope, Value>:
+struct WritableConnectedStateKey<Scope: ConnectedStateScope, Value>:
     ConnectedStateKeyProtocol
 {
     typealias Connection = WritableConnectedStateConnection<Value>
