@@ -4,8 +4,6 @@ import SwiftUI
 
 // MARK: - Connection sources and sessions
 
-protocol ConnectedStateScope {}
-
 private final class ConnectedStateConnectionIdentity {}
 
 enum ConnectedStateNoInput: Equatable {
@@ -244,10 +242,10 @@ private struct ResolvedConnection<Source: ConnectedStateSourceProtocol>: Dynamic
     }
 }
 
-/// The modifier is generic over the public scope contract, never the container
+/// The modifier is generic over the concrete scope type, never the container
 /// implementation which produced its connection.
 @MainActor
-private struct ConnectedStateScopeModifier<Scope: ConnectedStateScope>: ViewModifier {
+private struct ConnectedStateScopeModifier<Scope>: ViewModifier {
     @ResolvedConnection<ConnectedStateConnection<Scope>>
     private var scope: ConnectionNode<Scope>
 
@@ -267,7 +265,7 @@ extension View {
     /// Injects one statically known scope. The concrete object producing the scope
     /// is hidden behind `ConnectedStateConnection<Scope>`.
     @MainActor
-    func inject<Scope: ConnectedStateScope>(
+    func inject<Scope>(
         _ scope: ConnectedStateConnection<Scope>
     ) -> some View {
         modifier(ConnectedStateScopeModifier(scope))
@@ -278,9 +276,9 @@ extension View {
 
 @MainActor @propertyWrapper
 private struct ResolvedConnectedScope<
-    ParentScope: ConnectedStateScope,
+    ParentScope,
     Input: Equatable,
-    Scope: ConnectedStateScope
+    Scope
 >: DynamicProperty {
     @Environment private var parentScope: ConnectionNode<ParentScope>
     @State private var host = ConnectionHost<ConnectedStateFactory<Input, Scope>>()
@@ -316,9 +314,9 @@ private struct ResolvedConnectedScope<
 
 @MainActor
 private struct ConnectedScopeModifier<
-    ParentScope: ConnectedStateScope,
+    ParentScope,
     Input: Equatable,
-    Scope: ConnectedStateScope
+    Scope
 >: ViewModifier {
     @ResolvedConnectedScope<ParentScope, Input, Scope>
     private var scope: ConnectionNode<Scope>
@@ -341,9 +339,9 @@ extension View {
     /// disappears.
     @MainActor
     func scope<
-        ParentScope: ConnectedStateScope,
+        ParentScope,
         Input: Equatable,
-        Scope: ConnectedStateScope
+        Scope
     >(
         _ factory: KeyPath<ParentScope, ConnectedStateFactory<Input, Scope>>,
         input: Input
@@ -355,7 +353,7 @@ extension View {
 // MARK: - Connected state keys and projections
 
 protocol ConnectedStateKeyProtocol {
-    associatedtype Scope: ConnectedStateScope
+    associatedtype Scope
     associatedtype Connection: ConnectedStateSourceProtocol
         where Connection.Input == ConnectedStateNoInput
     associatedtype Projection
@@ -366,7 +364,7 @@ protocol ConnectedStateKeyProtocol {
     func projection(for node: ConnectionNode<Connection.Value>) -> Projection
 }
 
-struct ReadOnlyConnectedStateKey<Scope: ConnectedStateScope, Value>:
+struct ReadOnlyConnectedStateKey<Scope, Value>:
     ConnectedStateKeyProtocol
 {
     typealias Connection = ConnectedStateConnection<Value>
@@ -383,7 +381,7 @@ struct ReadOnlyConnectedStateKey<Scope: ConnectedStateScope, Value>:
     }
 }
 
-struct WritableConnectedStateKey<Scope: ConnectedStateScope, Value>:
+struct WritableConnectedStateKey<Scope, Value>:
     ConnectedStateKeyProtocol
 {
     typealias Connection = WritableConnectedStateConnection<Value>
@@ -439,14 +437,14 @@ struct ConnectedState<Key: ConnectedStateKeyProtocol>: DynamicProperty {
 
     private let key: Key
 
-    init<Scope: ConnectedStateScope, Value>(
+    init<Scope, Value>(
         _ keyPath: KeyPath<Scope, ConnectedStateConnection<Value>>
     ) where Key == ReadOnlyConnectedStateKey<Scope, Value> {
         self.key = ReadOnlyConnectedStateKey(keyPath: keyPath)
         self._scope = Environment(ConnectionNode<Scope>.self)
     }
 
-    init<Scope: ConnectedStateScope, Value>(
+    init<Scope, Value>(
         _ keyPath: KeyPath<Scope, WritableConnectedStateConnection<Value>>
     ) where Key == WritableConnectedStateKey<Scope, Value> {
         self.key = WritableConnectedStateKey(keyPath: keyPath)

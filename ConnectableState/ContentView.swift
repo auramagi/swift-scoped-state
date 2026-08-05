@@ -222,12 +222,12 @@ struct ProductDetailSnapshot: Equatable {
 }
 
 @MainActor
-struct AppScope: ConnectedStateScope {
+struct AppScope {
     let productDetail: ConnectedStateFactory<ProductDetailInput, ProductScope>
 }
 
 @MainActor
-struct AppDiagnosticsScope: ConnectedStateScope {
+struct AppDiagnosticsScope {
     let containerID: ConnectedStateConnection<UUID>
 }
 
@@ -337,7 +337,7 @@ final class ProductOptions {
 }
 
 @MainActor
-struct ProductScope: ConnectedStateScope {
+struct ProductScope {
     let orderState: WritableConnectedStateConnection<OrderState>
     let snapshot: ConnectedStateConnection<ProductDetailSnapshot>
     let isAvailable: ConnectedStateConnection<Bool>
