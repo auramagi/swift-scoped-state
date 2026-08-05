@@ -17,7 +17,8 @@ private struct AppRootView: View {
 
     var body: some View {
         ContentView()
-            .inject(container)
+            .inject(container.appScope)
+            .inject(container.diagnosticsScope)
     }
 }
 
@@ -35,8 +36,8 @@ struct ContentView: View {
                     .font(.largeTitle.bold())
 
                 Text(
-                    "The window injects every scope declared by AppContainer.body. This product "
-                        + "subtree asks one of those scopes for an ID-aware child container."
+                    "The window injects statically known scope connections. This product subtree "
+                        + "connects a child scope whose live state retains its ID-aware container."
                 )
                 .foregroundStyle(.secondary)
 
@@ -222,7 +223,7 @@ nonisolated struct ProductDetailSnapshot: Equatable {
 
 @MainActor
 struct AppScope: ConnectedStateScope {
-    let productDetail: ConnectedStateContainerFactory<ProductDetailInput>
+    let productDetail: ConnectedStateFactory<ProductDetailInput, ProductScope>
 }
 
 @MainActor
@@ -230,32 +231,51 @@ struct AppDiagnosticsScope: ConnectedStateScope {
     let containerID: ConnectedStateConnection<UUID>
 }
 
-@MainActor @Observable
-final class AppContainer: ConnectedStateContainer {
+@MainActor
+final class AppContainer {
     let containerID = UUID()
 
-    @ObservationIgnored private var orderSubjects: [
+    private var orderSubjects: [
         Int: CurrentValueSubject<OrderState, Never>
     ] = [:]
-    @ObservationIgnored private var favoriteSubjects: [
+    private var favoriteSubjects: [
         Int: CurrentValueSubject<Bool, Never>
     ] = [:]
-    @ObservationIgnored private lazy var productDetailFactory =
-        ConnectedStateContainerFactory<ProductDetailInput> { [unowned self] input in
-            ProductDetailContainer(appContainer: self, input: input)
+    private lazy var productDetail =
+        ConnectedStateFactory<ProductDetailInput, ProductScope> { [unowned self] input in
+            let container = ProductDetailContainer(appContainer: self, input: input)
+            let scope = container.scope
+            return ConnectedStateSession(
+                currentValue: { scope },
+                updates: Empty<ProductScope, Never>(completeImmediately: false)
+                    .eraseToAnyPublisher(),
+                updateInput: { container.update(input: $0) }
+            )
         }
 
-    var body: ConnectedStateContainerDefinition {
-        AppScope(productDetail: productDetailFactory)
+    private lazy var appScopeValue = AppScope(
+        productDetail: productDetail
+    )
 
-        AppDiagnosticsScope(
-            containerID: ConnectedStateConnection(
-                currentValue: { self.containerID },
-                updates: Empty<UUID, Never>(completeImmediately: false)
-                    .eraseToAnyPublisher()
+    lazy var appScope = ConnectedStateConnection(
+        currentValue: { [unowned self] in self.appScopeValue },
+        updates: Empty<AppScope, Never>(completeImmediately: false)
+            .eraseToAnyPublisher()
+    )
+
+    lazy var diagnosticsScope = ConnectedStateConnection(
+        currentValue: { [unowned self] in
+            AppDiagnosticsScope(
+                containerID: ConnectedStateConnection(
+                    currentValue: { self.containerID },
+                    updates: Empty<UUID, Never>(completeImmediately: false)
+                        .eraseToAnyPublisher()
+                )
             )
-        )
-    }
+        },
+        updates: Empty<AppDiagnosticsScope, Never>(completeImmediately: false)
+            .eraseToAnyPublisher()
+    )
 
     func buy(id productID: Int) {
         orderSubject(for: productID).send(.inCart)
@@ -325,23 +345,21 @@ struct ProductScope: ConnectedStateScope {
     let options: ConnectedStateConnection<ProductOptions>
 }
 
-@MainActor @Observable
-final class ProductDetailContainer: InputConnectedStateContainer {
-    typealias Input = ProductDetailInput
-
+@MainActor
+final class ProductDetailContainer {
     let appContainerID: UUID
     let containerID: UUID
 
-    @ObservationIgnored private let appContainer: AppContainer
-    @ObservationIgnored private var input: ProductDetailInput
-    @ObservationIgnored private var updateCount = 0
-    @ObservationIgnored private let orderSubject: CurrentValueSubject<OrderState, Never>
-    @ObservationIgnored private let availabilitySubject: CurrentValueSubject<Bool, Never>
-    @ObservationIgnored private let favoriteSubject: CurrentValueSubject<Bool, Never>
-    @ObservationIgnored private let options: ProductOptions
-    @ObservationIgnored private let snapshotSubject: CurrentValueSubject<ProductDetailSnapshot, Never>
-    @ObservationIgnored private var orderSubscription: AnyCancellable?
-    @ObservationIgnored private var favoriteSubscription: AnyCancellable?
+    private let appContainer: AppContainer
+    private var input: ProductDetailInput
+    private var updateCount = 0
+    private let orderSubject: CurrentValueSubject<OrderState, Never>
+    private let availabilitySubject: CurrentValueSubject<Bool, Never>
+    private let favoriteSubject: CurrentValueSubject<Bool, Never>
+    private let options: ProductOptions
+    private let snapshotSubject: CurrentValueSubject<ProductDetailSnapshot, Never>
+    private var orderSubscription: AnyCancellable?
+    private var favoriteSubscription: AnyCancellable?
 
     init(appContainer: AppContainer, input: ProductDetailInput) {
         let containerID = UUID()
@@ -380,7 +398,7 @@ final class ProductDetailContainer: InputConnectedStateContainer {
         snapshotSubject.send(snapshot)
     }
 
-    var body: ConnectedStateContainerDefinition {
+    var scope: ProductScope {
         ProductScope(
             orderState: WritableConnectedStateConnection(
                 currentValue: { self.orderSubject.value },
