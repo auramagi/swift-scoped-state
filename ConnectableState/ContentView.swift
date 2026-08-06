@@ -16,8 +16,8 @@ private struct AppRootView: View {
 
     var body: some View {
         ContentView()
-            .scope(container.appScope)
-            .scope(container.diagnosticsScope)
+            .container(container, scope: \.appScope)
+            .container(container, scope: \.diagnosticsScope)
     }
 }
 
@@ -36,7 +36,7 @@ struct ContentView: View {
                 Text("Container-scoped connected state")
                     .font(.largeTitle.bold())
 
-                Text("The window injects statically known scope connections. This product subtree connects a child scope whose live state retains its ID-aware container.")
+                Text("The window exposes scopes from its container. This product subtree connects a child scope whose live state retains its ID-aware container.")
                     .foregroundStyle(.secondary)
 
                 AppContainerDiagnostics()
@@ -255,23 +255,13 @@ struct ProductDetailSnapshot: Equatable {
         )
     }
 
-    private lazy var appScopeValue = AppScope(productDetail: productDetail)
+    lazy var appScope = AppScope(productDetail: productDetail)
 
-    lazy var appScope = ConnectedStateConnection(
-        currentValue: { [unowned self] in self.appScopeValue },
-        updates: Empty<AppScope, Never>(completeImmediately: false)
-    )
-
-    lazy var diagnosticsScope = ConnectedStateConnection(
-        currentValue: { [unowned self] in
-            AppDiagnosticsScope(
-                containerID: ConnectedStateConnection(
-                    currentValue: { self.containerID },
-                    updates: Empty<UUID, Never>(completeImmediately: false)
-                )
-            )
-        },
-        updates: Empty<AppDiagnosticsScope, Never>(completeImmediately: false)
+    lazy var diagnosticsScope = AppDiagnosticsScope(
+        containerID: ConnectedStateConnection(
+            currentValue: { [unowned self] in self.containerID },
+            updates: Empty<UUID, Never>(completeImmediately: false)
+        )
     )
 
     func buy(id productID: Int) {

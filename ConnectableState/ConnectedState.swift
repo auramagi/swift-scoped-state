@@ -241,15 +241,49 @@ struct ConnectedStateFactory<Input: Equatable, Value>: ConnectedStateSourceProto
     }
 }
 
-/// The modifier is generic over the concrete scope type, never the container
-/// implementation which produced its connection.
-@MainActor private struct ConnectedStateScopeModifier<Scope>: ViewModifier {
-    @ResolvedConnection<ConnectedStateConnection<Scope>> private var scope: ConnectionNode<Scope>
+@MainActor private final class ContainerScopeSessionState<Container: AnyObject, Scope> {
+    let container: Container
 
-    init(_ connection: ConnectedStateConnection<Scope>) {
+    var keyPath: KeyPath<Container, Scope>
+
+    init(container: Container, keyPath: KeyPath<Container, Scope>) {
+        self.container = container
+        self.keyPath = keyPath
+    }
+
+    var scope: Scope {
+        container[keyPath: keyPath]
+    }
+}
+
+private struct ContainerScopeSource<Container: AnyObject, Scope>: ConnectedStateSourceProtocol {
+    typealias Input = KeyPath<Container, Scope>
+
+    let container: Container
+
+    var identity: ObjectIdentifier {
+        ObjectIdentifier(container)
+    }
+
+    @MainActor func makeSession(input: KeyPath<Container, Scope>) -> ConnectedStateSession<KeyPath<Container, Scope>, Scope> {
+        let state = ContainerScopeSessionState(container: container, keyPath: input)
+        return ConnectedStateSession(
+            currentValue: { state.scope },
+            updates: Empty<Scope, Never>(completeImmediately: false),
+            updateInput: { state.keyPath = $0 }
+        )
+    }
+}
+
+/// Adapts an externally owned container to the scope type stored in the
+/// environment. The concrete container type does not escape this modifier.
+@MainActor private struct ContainerScopeModifier<Container: AnyObject, Scope>: ViewModifier {
+    @ResolvedConnection<ContainerScopeSource<Container, Scope>> private var scope: ConnectionNode<Scope>
+
+    init(container: Container, scope keyPath: KeyPath<Container, Scope>) {
         self._scope = ResolvedConnection(
-            source: connection,
-            input: .value
+            source: ContainerScopeSource(container: container),
+            input: keyPath
         )
     }
 
@@ -259,10 +293,12 @@ struct ConnectedStateFactory<Input: Equatable, Value>: ConnectedStateSourceProto
 }
 
 extension View {
-    /// Establishes one statically known scope. The concrete object producing the scope
-    /// is hidden behind `ConnectedStateConnection<Scope>`.
-    @MainActor func scope<Scope>(_ scope: ConnectedStateConnection<Scope>) -> some View {
-        modifier(ConnectedStateScopeModifier(scope))
+    /// Establishes a scope from an externally owned container.
+    @MainActor func container<Container: AnyObject, Scope>(
+        _ container: Container,
+        scope: KeyPath<Container, Scope>
+    ) -> some View {
+        modifier(ContainerScopeModifier(container: container, scope: scope))
     }
 }
 
