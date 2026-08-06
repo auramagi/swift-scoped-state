@@ -1,9 +1,10 @@
 import Combine
 import Foundation
 import Observation
+import ScopedState
 import SwiftUI
 
-@main struct MyApp: App {
+@main struct ExampleApp: App {
     var body: some Scene {
         WindowGroup {
             AppRootView()
