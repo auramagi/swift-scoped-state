@@ -4,7 +4,7 @@ import SwiftUI
 
 // MARK: - Connection sources and sessions
 
-final class ConnectionIdentity {}
+final class IdentityToken {}
 
 enum NoConnectionInput: Equatable {
     case value
@@ -40,7 +40,7 @@ protocol ConnectionSource: SendableMetatype {
 
     let updates: any Publisher<Value, Never>
 
-    let identityToken = ConnectionIdentity()
+    let identityToken = IdentityToken()
 
     var identity: ObjectIdentifier {
         ObjectIdentifier(identityToken)
@@ -64,7 +64,7 @@ protocol ConnectionSource: SendableMetatype {
 
     let setValue: @MainActor (Value) -> Void
 
-    let identityToken = ConnectionIdentity()
+    let identityToken = IdentityToken()
 
     var identity: ObjectIdentifier {
         ObjectIdentifier(identityToken)
@@ -82,7 +82,7 @@ protocol ConnectionSource: SendableMetatype {
 /// An input-bearing connection recipe. The session it creates owns the resulting
 /// state until the SwiftUI location holding the session disappears.
 struct ConnectionFactory<Input: Equatable, Value>: ConnectionSource {
-    let identityToken = ConnectionIdentity()
+    let identityToken = IdentityToken()
 
     let createSession: @MainActor (Input) -> ConnectionSession<Input, Value>
 
@@ -318,8 +318,8 @@ struct ReadOnlyConnectionKey<Scope, Value>: ConnectionKey {
 
     let keyPath: KeyPath<Scope, Connection<Value>>
 
-    @MainActor func projection(for value: Binding<Value>) -> ReadOnlyConnectionProjection<Value> {
-        ReadOnlyConnectionProjection(value: value)
+    @MainActor func projection(for value: Binding<Value>) -> ScopedStateProjection<Value> {
+        ScopedStateProjection(value: value)
     }
 }
 
@@ -333,7 +333,7 @@ struct WritableConnectionKey<Scope, Value>: ConnectionKey {
     }
 }
 
-@MainActor @dynamicMemberLookup struct ReadOnlyConnectionProjection<Value> {
+@MainActor @dynamicMemberLookup struct ScopedStateProjection<Value> {
     fileprivate let value: Binding<Value>
 
     subscript<Member>(dynamicMember keyPath: KeyPath<Value, Member>) -> Member {
@@ -341,7 +341,7 @@ struct WritableConnectionKey<Scope, Value>: ConnectionKey {
     }
 }
 
-extension ReadOnlyConnectionProjection where Value: AnyObject {
+extension ScopedStateProjection where Value: AnyObject {
     subscript<Member>(dynamicMember keyPath: ReferenceWritableKeyPath<Value, Member>) -> Binding<Member> {
         value[dynamicMember: keyPath]
     }
