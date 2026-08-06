@@ -220,72 +220,54 @@ struct ConnectedStateFactory<Input: Equatable, Value>: ConnectedStateSourceProto
 
 // MARK: - Typed scope injection
 
-@MainActor @propertyWrapper private struct ResolvedConnection<Source: ConnectedStateSourceProtocol>: DynamicProperty {
-    @State private var host = ConnectionHost<Source>()
+/// Resolves and retains one scope for the current container and key path.
+@MainActor private final class ContainerScopeResolver<Container: AnyObject, Scope> {
+    let node = ConnectionNode<Scope>()
 
-    private let source: Source
+    private var container: Container?
 
-    private let input: Source.Input
+    private var keyPath: KeyPath<Container, Scope>?
 
-    init(source: Source, input: Source.Input) {
-        self.source = source
-        self.input = input
-    }
+    func resolve(container: Container, keyPath: KeyPath<Container, Scope>) {
+        guard self.container !== container || self.keyPath != keyPath else {
+            return
+        }
 
-    mutating func update() {
-        host.connectIfNeeded(to: source, input: input)
-    }
-
-    var wrappedValue: ConnectionNode<Source.Value> {
-        host.node
+        let scope = container[keyPath: keyPath]
+        node.receive(scope)
+        self.container = container
+        self.keyPath = keyPath
     }
 }
 
-/// Resolves and retains one scope for the current container and key path.
-@MainActor private final class ContainerScopeSessionState<Container: AnyObject, Scope> {
-    let container: Container
+@MainActor @propertyWrapper private struct ResolvedContainerScope<Container: AnyObject, Scope>: DynamicProperty {
+    @State private var resolver = ContainerScopeResolver<Container, Scope>()
 
-    private(set) var scope: Scope
+    private let container: Container
+
+    private let keyPath: KeyPath<Container, Scope>
 
     init(container: Container, keyPath: KeyPath<Container, Scope>) {
         self.container = container
-        self.scope = container[keyPath: keyPath]
+        self.keyPath = keyPath
     }
 
-    func resolve(_ keyPath: KeyPath<Container, Scope>) {
-        scope = container[keyPath: keyPath]
-    }
-}
-
-private struct ContainerScopeSource<Container: AnyObject, Scope>: ConnectedStateSourceProtocol {
-    typealias Input = KeyPath<Container, Scope>
-
-    let container: Container
-
-    var identity: ObjectIdentifier {
-        ObjectIdentifier(container)
+    mutating func update() {
+        resolver.resolve(container: container, keyPath: keyPath)
     }
 
-    @MainActor func makeSession(input: KeyPath<Container, Scope>) -> ConnectedStateSession<KeyPath<Container, Scope>, Scope> {
-        let state = ContainerScopeSessionState(container: container, keyPath: input)
-        return ConnectedStateSession(
-            currentValue: { state.scope },
-            updates: Empty<Scope, Never>(completeImmediately: false),
-            updateInput: { state.resolve($0) }
-        )
+    var wrappedValue: ConnectionNode<Scope> {
+        resolver.node
     }
 }
 
 /// Adapts an externally owned container to the scope type stored in the
 /// environment. The concrete container type does not escape this modifier.
 @MainActor private struct ContainerScopeModifier<Container: AnyObject, Scope>: ViewModifier {
-    @ResolvedConnection<ContainerScopeSource<Container, Scope>> private var scope: ConnectionNode<Scope>
+    @ResolvedContainerScope<Container, Scope> private var scope: ConnectionNode<Scope>
 
     init(container: Container, scope keyPath: KeyPath<Container, Scope>) {
-        self._scope = ResolvedConnection(
-            source: ContainerScopeSource(container: container),
-            input: keyPath
-        )
+        self._scope = ResolvedContainerScope(container: container, keyPath: keyPath)
     }
 
     func body(content: Content) -> some View {
