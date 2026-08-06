@@ -99,14 +99,14 @@ struct ConnectionFactory<Input: Equatable, Value>: ConnectionSource {
 
 /// The observable value storage used both by connected properties and as the
 /// exact scope type stored in SwiftUI's environment.
-@MainActor @Observable final class ConnectionNode<Value> {
+@MainActor @Observable final class ScopedStateStorage<Value> {
     private(set) var value: Value?
 
     private(set) var generation = 0
 
     var requiredValue: Value {
         guard let value else {
-            preconditionFailure("Connected state was read before DynamicProperty.update()")
+            preconditionFailure("Scoped state was read before DynamicProperty.update()")
         }
         return value
     }
@@ -120,10 +120,10 @@ struct ConnectionFactory<Input: Equatable, Value>: ConnectionSource {
 /// The single, fully typed lifecycle owner used for ordinary state and scopes.
 /// Its source, input, session, and output types remain known after connection.
 @MainActor private final class ConnectionHost<Source: ConnectionSource> {
-    let node = ConnectionNode<Source.Value>()
+    let storage = ScopedStateStorage<Source.Value>()
 
     var connectedValue: Source.Value {
-        get { node.requiredValue }
+        get { storage.requiredValue }
         set { write(newValue) }
     }
 
@@ -149,7 +149,7 @@ struct ConnectionFactory<Input: Equatable, Value>: ConnectionSource {
         self.sourceIdentity = sourceIdentity
         self.input = input
         self.session = session
-        node.receive(session.currentValue())
+        storage.receive(session.currentValue())
 
         subscription = session.updates
             .eraseToAnyPublisher()
@@ -158,7 +158,7 @@ struct ConnectionFactory<Input: Equatable, Value>: ConnectionSource {
                 guard self?.sourceIdentity == sourceIdentity else {
                     return
                 }
-                self?.node.receive(value)
+                self?.storage.receive(value)
             }
     }
 
@@ -169,12 +169,12 @@ struct ConnectionFactory<Input: Equatable, Value>: ConnectionSource {
 
         self.input = input
         session.updateInput(input)
-        node.receive(session.currentValue())
+        storage.receive(session.currentValue())
     }
 
     private func write(_ value: Source.Value) {
         guard let setValue = session?.setValue else {
-            preconditionFailure("Connected state was written before DynamicProperty.update()")
+            preconditionFailure("Scoped state was written before DynamicProperty.update()")
         }
 
         setValue(value)
@@ -185,7 +185,7 @@ struct ConnectionFactory<Input: Equatable, Value>: ConnectionSource {
 
 @MainActor @propertyWrapper private struct ResolvedContainerScope<Container: AnyObject, Scope>: DynamicProperty {
     @MainActor private struct Storage {
-        let node = ConnectionNode<Scope>()
+        let scope = ScopedStateStorage<Scope>()
 
         var container: Container?
 
@@ -203,20 +203,20 @@ struct ConnectionFactory<Input: Equatable, Value>: ConnectionSource {
             return
         }
 
-        storage.node.receive(container[keyPath: keyPath])
+        storage.scope.receive(container[keyPath: keyPath])
         storage.container = container
         storage.keyPath = keyPath
     }
 
-    var wrappedValue: ConnectionNode<Scope> {
-        storage.node
+    var wrappedValue: ScopedStateStorage<Scope> {
+        storage.scope
     }
 }
 
 /// Adapts an externally owned container to the scope type stored in the
 /// environment. The concrete container type does not escape this modifier.
 @MainActor private struct ContainerScopeModifier<Container: AnyObject, Scope>: ViewModifier {
-    @ResolvedContainerScope<Container, Scope> private var scope: ConnectionNode<Scope>
+    @ResolvedContainerScope<Container, Scope> private var scope: ScopedStateStorage<Scope>
 
     init(container: Container, scope keyPath: KeyPath<Container, Scope>) {
         self._scope = ResolvedContainerScope(container: container, keyPath: keyPath)
@@ -241,7 +241,7 @@ extension View {
 // MARK: - Derived scopes
 
 @MainActor @propertyWrapper private struct ResolvedScope<ParentScope, Input: Equatable, Scope>: DynamicProperty {
-    @Environment private var parentScope: ConnectionNode<ParentScope>
+    @Environment private var parentScope: ScopedStateStorage<ParentScope>
 
     @State private var host = ConnectionHost<ConnectionFactory<Input, Scope>>()
 
@@ -255,7 +255,7 @@ extension View {
     ) {
         self.factory = factory
         self.input = input
-        self._parentScope = Environment(ConnectionNode<ParentScope>.self)
+        self._parentScope = Environment(ScopedStateStorage<ParentScope>.self)
     }
 
     func update() {
@@ -266,14 +266,14 @@ extension View {
         )
     }
 
-    var wrappedValue: ConnectionNode<Scope> {
+    var wrappedValue: ScopedStateStorage<Scope> {
         _ = parentScope.generation
-        return host.node
+        return host.storage
     }
 }
 
 @MainActor private struct ScopeModifier<ParentScope, Input: Equatable, Scope>: ViewModifier {
-    @ResolvedScope<ParentScope, Input, Scope> private var scope: ConnectionNode<Scope>
+    @ResolvedScope<ParentScope, Input, Scope> private var scope: ScopedStateStorage<Scope>
 
     init(
         factory: KeyPath<ParentScope, ConnectionFactory<Input, Scope>>,
@@ -299,7 +299,7 @@ extension View {
     }
 }
 
-// MARK: - Connected state keys and projections
+// MARK: - Scoped state keys and projections
 
 protocol ConnectionKey {
     associatedtype Scope
@@ -347,10 +347,10 @@ extension ReadOnlyConnectionProjection where Value: AnyObject {
     }
 }
 
-// MARK: - Connected state dynamic property
+// MARK: - Scoped state dynamic property
 
-@MainActor @propertyWrapper struct ConnectedState<Key: ConnectionKey>: DynamicProperty {
-    @Environment private var scope: ConnectionNode<Key.Scope>
+@MainActor @propertyWrapper struct ScopedState<Key: ConnectionKey>: DynamicProperty {
+    @Environment private var scope: ScopedStateStorage<Key.Scope>
 
     @State private var host = ConnectionHost<Key.Source>()
 
@@ -360,14 +360,14 @@ extension ReadOnlyConnectionProjection where Value: AnyObject {
         _ keyPath: KeyPath<Scope, Connection<Value>>
     ) where Key == ReadOnlyConnectionKey<Scope, Value> {
         self.key = ReadOnlyConnectionKey(keyPath: keyPath)
-        self._scope = Environment(ConnectionNode<Scope>.self)
+        self._scope = Environment(ScopedStateStorage<Scope>.self)
     }
 
     init<Scope, Value>(
         _ keyPath: KeyPath<Scope, WritableConnection<Value>>
     ) where Key == WritableConnectionKey<Scope, Value> {
         self.key = WritableConnectionKey(keyPath: keyPath)
-        self._scope = Environment(ConnectionNode<Scope>.self)
+        self._scope = Environment(ScopedStateStorage<Scope>.self)
     }
 
     func update() {
@@ -380,7 +380,7 @@ extension ReadOnlyConnectionProjection where Value: AnyObject {
 
     var wrappedValue: Key.Source.Value {
         _ = scope.generation
-        return host.node.requiredValue
+        return host.storage.requiredValue
     }
 
     var projectedValue: Key.Projection {

@@ -33,7 +33,7 @@ struct ContentView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 24) {
-                Text("Container-scoped connected state")
+                Text("Container-scoped state")
                     .font(.largeTitle.bold())
 
                 Text("The window exposes scopes from its container. This product subtree connects a child scope whose live state retains its ID-aware container.")
@@ -63,7 +63,7 @@ struct ContentView: View {
 }
 
 private struct AppContainerDiagnostics: View {
-    @ConnectedState(\AppDiagnosticsScope.containerID) private var containerID
+    @ScopedState(\AppDiagnosticsScope.containerID) private var containerID
 
     var body: some View {
         LabeledContent("Root container", value: String(containerID.uuidString.prefix(8)))
@@ -110,7 +110,7 @@ private struct ProductDetailDemo: View {
 }
 
 private struct ProductOrderButton: View {
-    @ConnectedState(\ProductScope.orderState) private var orderState
+    @ScopedState(\ProductScope.orderState) private var orderState
 
     var body: some View {
         Button {
@@ -129,11 +129,11 @@ private struct ProductOrderButton: View {
 }
 
 private struct ProductConnectionSemantics: View {
-    @ConnectedState(\ProductScope.isAvailable) private var isAvailable
+    @ScopedState(\ProductScope.isAvailable) private var isAvailable
 
-    @ConnectedState(\ProductScope.isFavorite) private var isFavorite
+    @ScopedState(\ProductScope.isFavorite) private var isFavorite
 
-    @ConnectedState(\ProductScope.options) private var options
+    @ScopedState(\ProductScope.options) private var options
 
     var body: some View {
         GroupBox("Connection semantics") {
@@ -159,7 +159,7 @@ private struct ProductConnectionSemantics: View {
 }
 
 private struct ProductContainerDiagnostics: View {
-    @ConnectedState(\ProductScope.snapshot) private var snapshot
+    @ScopedState(\ProductScope.snapshot) private var snapshot
 
     var body: some View {
         GroupBox("Resolved container") {
