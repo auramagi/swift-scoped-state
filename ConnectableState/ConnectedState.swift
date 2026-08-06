@@ -97,31 +97,18 @@ struct ConnectionFactory<Input: Equatable, Value>: ConnectionSource {
 
 // MARK: - Universal connection lifecycle
 
-/// The observable endpoint used both by connected properties and as the exact
-/// scope type stored in SwiftUI's environment.
+/// The observable value storage used both by connected properties and as the
+/// exact scope type stored in SwiftUI's environment.
 @MainActor @Observable final class ConnectionNode<Value> {
     private(set) var value: Value?
 
     private(set) var generation = 0
-
-    @ObservationIgnored private var setValue: (@MainActor (Value) -> Void)?
 
     var requiredValue: Value {
         guard let value else {
             preconditionFailure("Connected state was read before DynamicProperty.update()")
         }
         return value
-    }
-
-    func send(_ value: Value) {
-        guard let setValue else {
-            preconditionFailure("Connected state was written before DynamicProperty.update()")
-        }
-        setValue(value)
-    }
-
-    fileprivate func use(setValue: (@MainActor (Value) -> Void)?) {
-        self.setValue = setValue
     }
 
     fileprivate func receive(_ value: Value) {
@@ -137,7 +124,7 @@ struct ConnectionFactory<Input: Equatable, Value>: ConnectionSource {
 
     var connectedValue: Source.Value {
         get { node.requiredValue }
-        set { node.send(newValue) }
+        set { write(newValue) }
     }
 
     private var sourceIdentity: ObjectIdentifier?
@@ -162,7 +149,6 @@ struct ConnectionFactory<Input: Equatable, Value>: ConnectionSource {
         self.sourceIdentity = sourceIdentity
         self.input = input
         self.session = session
-        node.use(setValue: session.setValue)
         node.receive(session.currentValue())
 
         subscription = session.updates
@@ -184,6 +170,14 @@ struct ConnectionFactory<Input: Equatable, Value>: ConnectionSource {
         self.input = input
         session.updateInput(input)
         node.receive(session.currentValue())
+    }
+
+    private func write(_ value: Source.Value) {
+        guard let setValue = session?.setValue else {
+            preconditionFailure("Connected state was written before DynamicProperty.update()")
+        }
+
+        setValue(value)
     }
 }
 
