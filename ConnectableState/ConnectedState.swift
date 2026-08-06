@@ -241,18 +241,19 @@ struct ConnectedStateFactory<Input: Equatable, Value>: ConnectedStateSourceProto
     }
 }
 
+/// Resolves and retains one scope for the current container and key path.
 @MainActor private final class ContainerScopeSessionState<Container: AnyObject, Scope> {
     let container: Container
 
-    var keyPath: KeyPath<Container, Scope>
+    private(set) var scope: Scope
 
     init(container: Container, keyPath: KeyPath<Container, Scope>) {
         self.container = container
-        self.keyPath = keyPath
+        self.scope = container[keyPath: keyPath]
     }
 
-    var scope: Scope {
-        container[keyPath: keyPath]
+    func resolve(_ keyPath: KeyPath<Container, Scope>) {
+        scope = container[keyPath: keyPath]
     }
 }
 
@@ -270,7 +271,7 @@ private struct ContainerScopeSource<Container: AnyObject, Scope>: ConnectedState
         return ConnectedStateSession(
             currentValue: { state.scope },
             updates: Empty<Scope, Never>(completeImmediately: false),
-            updateInput: { state.keyPath = $0 }
+            updateInput: { state.resolve($0) }
         )
     }
 }

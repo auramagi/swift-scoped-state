@@ -245,24 +245,28 @@ struct ProductDetailSnapshot: Equatable {
 
     private var favoriteSubjects: [Int: CurrentValueSubject<Bool, Never>] = [:]
 
-    private lazy var productDetail = ConnectedStateFactory<ProductDetailInput, ProductScope> { [unowned self] input in
-        let container = ProductDetailContainer(appContainer: self, input: input)
-        let scope = container.scope
-        return ConnectedStateSession(
-            currentValue: { scope },
-            updates: Empty<ProductScope, Never>(completeImmediately: false),
-            updateInput: { container.update(input: $0) }
+    var appScope: AppScope {
+        AppScope(
+            productDetail: ConnectedStateFactory { [unowned self] input in
+                let container = ProductDetailContainer(appContainer: self, input: input)
+                let scope = container.scope
+                return ConnectedStateSession(
+                    currentValue: { scope },
+                    updates: Empty<ProductScope, Never>(completeImmediately: false),
+                    updateInput: { container.update(input: $0) }
+                )
+            }
         )
     }
 
-    lazy var appScope = AppScope(productDetail: productDetail)
-
-    lazy var diagnosticsScope = AppDiagnosticsScope(
-        containerID: ConnectedStateConnection(
-            currentValue: { [unowned self] in self.containerID },
-            updates: Empty<UUID, Never>(completeImmediately: false)
+    var diagnosticsScope: AppDiagnosticsScope {
+        AppDiagnosticsScope(
+            containerID: ConnectedStateConnection(
+                currentValue: { [unowned self] in self.containerID },
+                updates: Empty<UUID, Never>(completeImmediately: false)
+            )
         )
-    )
+    }
 
     func buy(id productID: Int) {
         orderSubject(for: productID).send(.inCart)
