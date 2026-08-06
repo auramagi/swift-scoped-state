@@ -16,8 +16,8 @@ private struct AppRootView: View {
 
     var body: some View {
         ContentView()
-            .inject(container.appScope)
-            .inject(container.diagnosticsScope)
+            .scope(container.appScope)
+            .scope(container.diagnosticsScope)
     }
 }
 

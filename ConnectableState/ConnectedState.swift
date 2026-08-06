@@ -259,9 +259,9 @@ struct ConnectedStateFactory<Input: Equatable, Value>: ConnectedStateSourceProto
 }
 
 extension View {
-    /// Injects one statically known scope. The concrete object producing the scope
+    /// Establishes one statically known scope. The concrete object producing the scope
     /// is hidden behind `ConnectedStateConnection<Scope>`.
-    @MainActor func inject<Scope>(_ scope: ConnectedStateConnection<Scope>) -> some View {
+    @MainActor func scope<Scope>(_ scope: ConnectedStateConnection<Scope>) -> some View {
         modifier(ConnectedStateScopeModifier(scope))
     }
 }
