@@ -231,11 +231,11 @@ struct ProductDetailSnapshot: Equatable {
 }
 
 @MainActor struct AppScope {
-    let productDetail: ConnectedStateFactory<ProductDetailInput, ProductScope>
+    let productDetail: ConnectionFactory<ProductDetailInput, ProductScope>
 }
 
 @MainActor struct AppDiagnosticsScope {
-    let containerID: ConnectedStateConnection<UUID>
+    let containerID: Connection<UUID>
 }
 
 @MainActor final class AppContainer {
@@ -247,10 +247,10 @@ struct ProductDetailSnapshot: Equatable {
 
     var appScope: AppScope {
         AppScope(
-            productDetail: ConnectedStateFactory { [unowned self] input in
+            productDetail: ConnectionFactory { [unowned self] input in
                 let container = ProductDetailContainer(appContainer: self, input: input)
                 let scope = container.scope
-                return ConnectedStateSession(
+                return ConnectionSession(
                     currentValue: { scope },
                     updates: Empty<ProductScope, Never>(completeImmediately: false),
                     updateInput: { container.update(input: $0) }
@@ -261,7 +261,7 @@ struct ProductDetailSnapshot: Equatable {
 
     var diagnosticsScope: AppDiagnosticsScope {
         AppDiagnosticsScope(
-            containerID: ConnectedStateConnection(
+            containerID: Connection(
                 currentValue: { [unowned self] in self.containerID },
                 updates: Empty<UUID, Never>(completeImmediately: false)
             )
@@ -324,15 +324,15 @@ struct ProductDetailSnapshot: Equatable {
 }
 
 @MainActor struct ProductScope {
-    let orderState: WritableConnectedStateConnection<OrderState>
+    let orderState: WritableConnection<OrderState>
 
-    let snapshot: ConnectedStateConnection<ProductDetailSnapshot>
+    let snapshot: Connection<ProductDetailSnapshot>
 
-    let isAvailable: ConnectedStateConnection<Bool>
+    let isAvailable: Connection<Bool>
 
-    let isFavorite: WritableConnectedStateConnection<Bool>
+    let isFavorite: WritableConnection<Bool>
 
-    let options: ConnectedStateConnection<ProductOptions>
+    let options: Connection<ProductOptions>
 }
 
 @MainActor final class ProductDetailContainer {
@@ -399,25 +399,25 @@ struct ProductDetailSnapshot: Equatable {
 
     var scope: ProductScope {
         ProductScope(
-            orderState: WritableConnectedStateConnection(
+            orderState: WritableConnection(
                 currentValue: { self.orderSubject.value },
                 updates: orderSubject,
                 setValue: { self.setOrderState($0) }
             ),
-            snapshot: ConnectedStateConnection(
+            snapshot: Connection(
                 currentValue: { self.snapshot },
                 updates: snapshotSubject
             ),
-            isAvailable: ConnectedStateConnection(
+            isAvailable: Connection(
                 currentValue: { self.availabilitySubject.value },
                 updates: availabilitySubject
             ),
-            isFavorite: WritableConnectedStateConnection(
+            isFavorite: WritableConnection(
                 currentValue: { self.favoriteSubject.value },
                 updates: favoriteSubject,
                 setValue: { self.setFavorite($0) }
             ),
-            options: ConnectedStateConnection(
+            options: Connection(
                 currentValue: { self.options },
                 updates: Empty(completeImmediately: false)
             )
