@@ -4,7 +4,7 @@ import SwiftUI
 
 // MARK: - Connection sources and sessions
 
-private final class ConnectionIdentity {}
+final class ConnectionIdentity {}
 
 enum NoConnectionInput: Equatable {
     case value
@@ -13,25 +13,13 @@ enum NoConnectionInput: Equatable {
 /// A live connection created for one SwiftUI location.
 /// Its closures retain any implementation object needed to keep the value alive.
 @MainActor struct ConnectionSession<Input: Equatable, Value> {
-    fileprivate let currentValue: @MainActor () -> Value
+    let currentValue: @MainActor () -> Value
 
-    fileprivate let updates: any Publisher<Value, Never>
+    let updates: any Publisher<Value, Never>
 
-    fileprivate let setValue: (@MainActor (Value) -> Void)?
+    private(set) var setValue: (@MainActor (Value) -> Void)? = nil
 
-    fileprivate let updateInput: @MainActor (Input) -> Void
-
-    init(
-        currentValue: @escaping @MainActor () -> Value,
-        updates: some Publisher<Value, Never>,
-        setValue: (@MainActor (Value) -> Void)? = nil,
-        updateInput: @escaping @MainActor (Input) -> Void = { _ in }
-    ) {
-        self.currentValue = currentValue
-        self.updates = updates
-        self.setValue = setValue
-        self.updateInput = updateInput
-    }
+    private(set) var updateInput: @MainActor (Input) -> Void = { _ in }
 }
 
 protocol ConnectionSource: SendableMetatype {
@@ -39,28 +27,20 @@ protocol ConnectionSource: SendableMetatype {
 
     associatedtype Value
 
-    var identity: ObjectIdentifier { get }
+    @MainActor var identity: ObjectIdentifier { get }
 
     @MainActor func makeSession(input: Input) -> ConnectionSession<Input, Value>
 }
 
 /// A read-only connection which needs no external input.
-struct Connection<Value>: ConnectionSource {
+@MainActor struct Connection<Value>: ConnectionSource {
     typealias Input = NoConnectionInput
 
-    @MainActor private let getCurrentValue: @MainActor () -> Value
+    let currentValue: @MainActor () -> Value
 
-    @MainActor private let updates: any Publisher<Value, Never>
+    let updates: any Publisher<Value, Never>
 
-    private let identityToken = ConnectionIdentity()
-
-    @MainActor init(
-        currentValue: @escaping @MainActor () -> Value,
-        updates: some Publisher<Value, Never>
-    ) {
-        self.getCurrentValue = currentValue
-        self.updates = updates
-    }
+    let identityToken = ConnectionIdentity()
 
     var identity: ObjectIdentifier {
         ObjectIdentifier(identityToken)
@@ -68,33 +48,23 @@ struct Connection<Value>: ConnectionSource {
 
     @MainActor func makeSession(input: NoConnectionInput) -> ConnectionSession<NoConnectionInput, Value> {
         ConnectionSession(
-            currentValue: getCurrentValue,
+            currentValue: currentValue,
             updates: updates
         )
     }
 }
 
 /// A replaceable connection which needs no external input.
-struct WritableConnection<Value>: ConnectionSource {
+@MainActor struct WritableConnection<Value>: ConnectionSource {
     typealias Input = NoConnectionInput
 
-    @MainActor private let getCurrentValue: @MainActor () -> Value
+    let currentValue: @MainActor () -> Value
 
-    @MainActor private let updates: any Publisher<Value, Never>
+    let updates: any Publisher<Value, Never>
 
-    @MainActor private let setValue: @MainActor (Value) -> Void
+    let setValue: @MainActor (Value) -> Void
 
-    private let identityToken = ConnectionIdentity()
-
-    @MainActor init(
-        currentValue: @escaping @MainActor () -> Value,
-        updates: some Publisher<Value, Never>,
-        setValue: @escaping @MainActor (Value) -> Void
-    ) {
-        self.getCurrentValue = currentValue
-        self.updates = updates
-        self.setValue = setValue
-    }
+    let identityToken = ConnectionIdentity()
 
     var identity: ObjectIdentifier {
         ObjectIdentifier(identityToken)
@@ -102,7 +72,7 @@ struct WritableConnection<Value>: ConnectionSource {
 
     @MainActor func makeSession(input: NoConnectionInput) -> ConnectionSession<NoConnectionInput, Value> {
         ConnectionSession(
-            currentValue: getCurrentValue,
+            currentValue: currentValue,
             updates: updates,
             setValue: setValue
         )
@@ -112,22 +82,16 @@ struct WritableConnection<Value>: ConnectionSource {
 /// An input-bearing connection recipe. The session it creates owns the resulting
 /// state until the SwiftUI location holding the session disappears.
 struct ConnectionFactory<Input: Equatable, Value>: ConnectionSource {
-    private let identityToken = ConnectionIdentity()
+    let identityToken = ConnectionIdentity()
 
-    private let connect: @MainActor (Input) -> ConnectionSession<Input, Value>
-
-    @MainActor init(
-        _ connect: @escaping @MainActor (Input) -> ConnectionSession<Input, Value>
-    ) {
-        self.connect = connect
-    }
+    let createSession: @MainActor (Input) -> ConnectionSession<Input, Value>
 
     var identity: ObjectIdentifier {
         ObjectIdentifier(identityToken)
     }
 
     @MainActor func makeSession(input: Input) -> ConnectionSession<Input, Value> {
-        connect(input)
+        createSession(input)
     }
 }
 
@@ -225,44 +189,33 @@ struct ConnectionFactory<Input: Equatable, Value>: ConnectionSource {
 
 // MARK: - Typed scope injection
 
-/// Resolves and retains one scope for the current container and key path.
-@MainActor private final class ContainerScopeResolver<Container: AnyObject, Scope> {
-    let node = ConnectionNode<Scope>()
+@MainActor @propertyWrapper private struct ResolvedContainerScope<Container: AnyObject, Scope>: DynamicProperty {
+    @MainActor private struct Storage {
+        let node = ConnectionNode<Scope>()
 
-    private var container: Container?
+        var container: Container?
 
-    private var keyPath: KeyPath<Container, Scope>?
+        var keyPath: KeyPath<Container, Scope>?
+    }
 
-    func resolve(container: Container, keyPath: KeyPath<Container, Scope>) {
-        guard self.container !== container || self.keyPath != keyPath else {
+    @State private var storage = Storage()
+
+    let container: Container
+
+    let keyPath: KeyPath<Container, Scope>
+
+    func update() {
+        guard storage.container !== container || storage.keyPath != keyPath else {
             return
         }
 
-        let scope = container[keyPath: keyPath]
-        node.receive(scope)
-        self.container = container
-        self.keyPath = keyPath
-    }
-}
-
-@MainActor @propertyWrapper private struct ResolvedContainerScope<Container: AnyObject, Scope>: DynamicProperty {
-    @State private var resolver = ContainerScopeResolver<Container, Scope>()
-
-    private let container: Container
-
-    private let keyPath: KeyPath<Container, Scope>
-
-    init(container: Container, keyPath: KeyPath<Container, Scope>) {
-        self.container = container
-        self.keyPath = keyPath
-    }
-
-    mutating func update() {
-        resolver.resolve(container: container, keyPath: keyPath)
+        storage.node.receive(container[keyPath: keyPath])
+        storage.container = container
+        storage.keyPath = keyPath
     }
 
     var wrappedValue: ConnectionNode<Scope> {
-        resolver.node
+        storage.node
     }
 }
 
@@ -276,7 +229,8 @@ struct ConnectionFactory<Input: Equatable, Value>: ConnectionSource {
     }
 
     func body(content: Content) -> some View {
-        content.environment(scope)
+        content
+            .environment(scope)
     }
 }
 
@@ -310,7 +264,7 @@ extension View {
         self._parentScope = Environment(ConnectionNode<ParentScope>.self)
     }
 
-    mutating func update() {
+    func update() {
         _ = parentScope.generation
         host.connectIfNeeded(
             to: parentScope.requiredValue[keyPath: factory],
@@ -386,11 +340,7 @@ struct WritableConnectionKey<Scope, Value>: ConnectionKey {
 }
 
 @MainActor @dynamicMemberLookup struct ReadOnlyConnectionProjection<Value> {
-    private let value: Binding<Value>
-
-    fileprivate init(value: Binding<Value>) {
-        self.value = value
-    }
+    fileprivate let value: Binding<Value>
 
     subscript<Member>(dynamicMember keyPath: KeyPath<Value, Member>) -> Member {
         value.wrappedValue[keyPath: keyPath]
@@ -426,7 +376,7 @@ extension ReadOnlyConnectionProjection where Value: AnyObject {
         self._scope = Environment(ConnectionNode<Scope>.self)
     }
 
-    mutating func update() {
+    func update() {
         _ = scope.generation
         host.connectIfNeeded(
             to: scope.requiredValue[keyPath: key.keyPath],
