@@ -247,7 +247,7 @@ struct ProductDetailSnapshot: Equatable {
 
     var appScope: AppScope {
         AppScope(
-            productDetail: ConnectionFactory { [unowned self] input in
+            productDetail: ConnectionFactory { input in
                 let container = ProductDetailContainer(appContainer: self, input: input)
                 let scope = container.scope
                 return ConnectionSession(
@@ -262,7 +262,7 @@ struct ProductDetailSnapshot: Equatable {
     var diagnosticsScope: AppDiagnosticsScope {
         AppDiagnosticsScope(
             containerID: Connection(
-                currentValue: { [unowned self] in self.containerID },
+                currentValue: { self.containerID },
                 updates: Empty<UUID, Never>(completeImmediately: false)
             )
         )
