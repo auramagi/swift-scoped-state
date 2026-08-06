@@ -3,8 +3,7 @@ import Foundation
 import Observation
 import SwiftUI
 
-@main
-struct MyApp: App {
+@main struct MyApp: App {
     var body: some Scene {
         WindowGroup {
             AppRootView()
@@ -26,7 +25,9 @@ private struct AppRootView: View {
 
 struct ContentView: View {
     @State private var pricingMode = PricingMode.standard
+
     @State private var productID = 100
+
     @State private var isProductScopeMounted = true
 
     var body: some View {
@@ -65,8 +66,7 @@ struct ContentView: View {
 }
 
 private struct AppContainerDiagnostics: View {
-    @ConnectedState(\AppDiagnosticsScope.containerID)
-    private var containerID
+    @ConnectedState(\AppDiagnosticsScope.containerID) private var containerID
 
     var body: some View {
         LabeledContent("Root container", value: String(containerID.uuidString.prefix(8)))
@@ -76,7 +76,9 @@ private struct AppContainerDiagnostics: View {
 
 private struct ScopeControls: View {
     @Binding var productID: Int
+
     @Binding var pricingMode: PricingMode
+
     @Binding var isProductScopeMounted: Bool
 
     var body: some View {
@@ -87,8 +89,8 @@ private struct ScopeControls: View {
                 Stepper("Product ID: \(productID)", value: $productID, in: 100 ... 103)
 
                 Picker("Pricing", selection: $pricingMode) {
-                    ForEach(PricingMode.allCases) { mode in
-                        Text(mode.rawValue).tag(mode)
+                    ForEach(PricingMode.allCases, id: \.self) { mode in
+                        Text(mode.rawValue)
                     }
                 }
                 .pickerStyle(.segmented)
@@ -102,15 +104,16 @@ private struct ProductDetailDemo: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             ProductOrderButton()
+
             ProductConnectionSemantics()
+
             ProductContainerDiagnostics()
         }
     }
 }
 
 private struct ProductOrderButton: View {
-    @ConnectedState(\ProductScope.orderState)
-    private var orderState
+    @ConnectedState(\ProductScope.orderState) private var orderState
 
     var body: some View {
         Button {
@@ -129,14 +132,11 @@ private struct ProductOrderButton: View {
 }
 
 private struct ProductConnectionSemantics: View {
-    @ConnectedState(\ProductScope.isAvailable)
-    private var isAvailable
+    @ConnectedState(\ProductScope.isAvailable) private var isAvailable
 
-    @ConnectedState(\ProductScope.isFavorite)
-    private var isFavorite
+    @ConnectedState(\ProductScope.isFavorite) private var isFavorite
 
-    @ConnectedState(\ProductScope.options)
-    private var options
+    @ConnectedState(\ProductScope.options) private var options
 
     var body: some View {
         GroupBox("Connection semantics") {
@@ -144,13 +144,16 @@ private struct ProductConnectionSemantics: View {
                 LabeledContent("Read-only Bool", value: isAvailable ? "Available" : "Unavailable")
 
                 Toggle("Favorite", isOn: $isFavorite)
+
                 Toggle("Not favorite (writable key-path projection)", isOn: $isFavorite.inverted)
 
                 Divider()
 
                 Text("Read-only object reference")
                     .font(.headline)
+
                 Toggle("Gift wrap", isOn: $options.includesGiftWrap)
+
                 Stepper("Quantity: \(options.quantity)", value: $options.quantity, in: 1 ... 10)
             }
             .padding(.vertical, 4)
@@ -159,16 +162,19 @@ private struct ProductConnectionSemantics: View {
 }
 
 private struct ProductContainerDiagnostics: View {
-    @ConnectedState(\ProductScope.snapshot)
-    private var snapshot
+    @ConnectedState(\ProductScope.snapshot) private var snapshot
 
     var body: some View {
         GroupBox("Resolved container") {
             Grid(alignment: .leading, horizontalSpacing: 20, verticalSpacing: 8) {
                 diagnosticRow("App instance", snapshot.appContainerID.uuidString.prefix(8))
+
                 diagnosticRow("Product instance", snapshot.containerID.uuidString.prefix(8))
+
                 diagnosticRow("Product", snapshot.productID)
+
                 diagnosticRow("Pricing", snapshot.pricingMode.rawValue)
+
                 diagnosticRow("In-place updates", snapshot.updateCount)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -180,6 +186,7 @@ private struct ProductContainerDiagnostics: View {
         GridRow {
             Text(label)
                 .foregroundStyle(.secondary)
+
             Text(value.description)
                 .monospaced()
                 .textSelection(.enabled)
@@ -191,14 +198,14 @@ private struct ProductContainerDiagnostics: View {
 
 enum OrderState: String {
     case inCart = "In cart"
+    
     case notInCart = "Not in cart"
 }
 
-enum PricingMode: String, CaseIterable, Identifiable {
+enum PricingMode: String, CaseIterable {
     case standard = "Standard"
+    
     case member = "Member"
-
-    var id: Self { self }
 }
 
 extension Bool {
@@ -210,52 +217,49 @@ extension Bool {
 
 struct ProductDetailInput: Equatable {
     var productID: Int
+
     var pricingMode: PricingMode
 }
 
 struct ProductDetailSnapshot: Equatable {
     let appContainerID: UUID
+
     let containerID: UUID
+
     let productID: Int
+
     let pricingMode: PricingMode
+
     let updateCount: Int
 }
 
-@MainActor
-struct AppScope {
+@MainActor struct AppScope {
     let productDetail: ConnectedStateFactory<ProductDetailInput, ProductScope>
 }
 
-@MainActor
-struct AppDiagnosticsScope {
+@MainActor struct AppDiagnosticsScope {
     let containerID: ConnectedStateConnection<UUID>
 }
 
-@MainActor
-final class AppContainer {
+@MainActor final class AppContainer {
     let containerID = UUID()
 
-    private var orderSubjects: [
-        Int: CurrentValueSubject<OrderState, Never>
-    ] = [:]
-    private var favoriteSubjects: [
-        Int: CurrentValueSubject<Bool, Never>
-    ] = [:]
-    private lazy var productDetail =
-        ConnectedStateFactory<ProductDetailInput, ProductScope> { [unowned self] input in
-            let container = ProductDetailContainer(appContainer: self, input: input)
-            let scope = container.scope
-            return ConnectedStateSession(
-                currentValue: { scope },
-                updates: Empty<ProductScope, Never>(completeImmediately: false)
-                    .eraseToAnyPublisher(),
-                updateInput: { container.update(input: $0) }
-            )
-        }
+    private var orderSubjects: [Int: CurrentValueSubject<OrderState, Never>] = [:]
 
-    private lazy var appScopeValue = AppScope(
-        productDetail: productDetail
-    )
+    private var favoriteSubjects: [Int: CurrentValueSubject<Bool, Never>] = [:]
+
+    private lazy var productDetail = ConnectedStateFactory<ProductDetailInput, ProductScope> { [unowned self] input in
+        let container = ProductDetailContainer(appContainer: self, input: input)
+        let scope = container.scope
+        return ConnectedStateSession(
+            currentValue: { scope },
+            updates: Empty<ProductScope, Never>(completeImmediately: false)
+                .eraseToAnyPublisher(),
+            updateInput: { container.update(input: $0) }
+        )
+    }
+
+    private lazy var appScopeValue = AppScope(productDetail: productDetail)
 
     lazy var appScope = ConnectedStateConnection(
         currentValue: { [unowned self] in self.appScopeValue },
@@ -305,9 +309,7 @@ final class AppContainer {
         favoriteSubject(for: productID).eraseToAnyPublisher()
     }
 
-    private func orderSubject(
-        for productID: Int
-    ) -> CurrentValueSubject<OrderState, Never> {
+    private func orderSubject(for productID: Int) -> CurrentValueSubject<OrderState, Never> {
         if let subject = orderSubjects[productID] {
             return subject
         }
@@ -317,9 +319,7 @@ final class AppContainer {
         return subject
     }
 
-    private func favoriteSubject(
-        for productID: Int
-    ) -> CurrentValueSubject<Bool, Never> {
+    private func favoriteSubject(for productID: Int) -> CurrentValueSubject<Bool, Never> {
         if let subject = favoriteSubjects[productID] {
             return subject
         }
@@ -330,35 +330,47 @@ final class AppContainer {
     }
 }
 
-@MainActor @Observable
-final class ProductOptions {
+@MainActor @Observable final class ProductOptions {
     var includesGiftWrap = false
+
     var quantity = 1
 }
 
-@MainActor
-struct ProductScope {
+@MainActor struct ProductScope {
     let orderState: WritableConnectedStateConnection<OrderState>
+
     let snapshot: ConnectedStateConnection<ProductDetailSnapshot>
+
     let isAvailable: ConnectedStateConnection<Bool>
+
     let isFavorite: WritableConnectedStateConnection<Bool>
+
     let options: ConnectedStateConnection<ProductOptions>
 }
 
-@MainActor
-final class ProductDetailContainer {
+@MainActor final class ProductDetailContainer {
     let appContainerID: UUID
+
     let containerID: UUID
 
     private let appContainer: AppContainer
+
     private var input: ProductDetailInput
+
     private var updateCount = 0
+
     private let orderSubject: CurrentValueSubject<OrderState, Never>
+
     private let availabilitySubject: CurrentValueSubject<Bool, Never>
+
     private let favoriteSubject: CurrentValueSubject<Bool, Never>
+
     private let options: ProductOptions
+
     private let snapshotSubject: CurrentValueSubject<ProductDetailSnapshot, Never>
+
     private var orderSubscription: AnyCancellable?
+
     private var favoriteSubscription: AnyCancellable?
 
     init(appContainer: AppContainer, input: ProductDetailInput) {
