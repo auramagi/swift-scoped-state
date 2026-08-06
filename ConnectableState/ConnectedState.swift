@@ -171,6 +171,11 @@ struct ConnectedStateFactory<Input: Equatable, Value>: ConnectedStateSourceProto
 @MainActor private final class ConnectionHost<Source: ConnectedStateSourceProtocol> {
     let node = ConnectionNode<Source.Value>()
 
+    var connectedValue: Source.Value {
+        get { node.requiredValue }
+        set { node.send(newValue) }
+    }
+
     private var sourceIdentity: ObjectIdentifier?
 
     private var input: Source.Input?
@@ -357,7 +362,7 @@ protocol ConnectedStateKeyProtocol {
 
     var keyPath: KeyPath<Scope, Connection> { get }
 
-    @MainActor func projection(for node: ConnectionNode<Connection.Value>) -> Projection
+    @MainActor func projection(for value: Binding<Connection.Value>) -> Projection
 }
 
 struct ReadOnlyConnectedStateKey<Scope, Value>: ConnectedStateKeyProtocol {
@@ -365,10 +370,8 @@ struct ReadOnlyConnectedStateKey<Scope, Value>: ConnectedStateKeyProtocol {
 
     let keyPath: KeyPath<Scope, ConnectedStateConnection<Value>>
 
-    @MainActor func projection(for node: ConnectionNode<Value>) -> ReadOnlyConnectedStateProjection<Value> {
-        ReadOnlyConnectedStateProjection {
-            node.requiredValue
-        }
+    @MainActor func projection(for value: Binding<Value>) -> ReadOnlyConnectedStateProjection<Value> {
+        ReadOnlyConnectedStateProjection(value: value)
     }
 }
 
@@ -377,37 +380,26 @@ struct WritableConnectedStateKey<Scope, Value>: ConnectedStateKeyProtocol {
 
     let keyPath: KeyPath<Scope, WritableConnectedStateConnection<Value>>
 
-    @MainActor func projection(for node: ConnectionNode<Value>) -> Binding<Value> {
-        Binding(
-            get: { node.requiredValue },
-            set: { node.send($0) }
-        )
+    @MainActor func projection(for value: Binding<Value>) -> Binding<Value> {
+        value
     }
 }
 
 @MainActor @dynamicMemberLookup struct ReadOnlyConnectedStateProjection<Value> {
-    private let getValue: @MainActor () -> Value
+    private let value: Binding<Value>
 
-    fileprivate init(getValue: @escaping @MainActor () -> Value) {
-        self.getValue = getValue
+    fileprivate init(value: Binding<Value>) {
+        self.value = value
     }
 
     subscript<Member>(dynamicMember keyPath: KeyPath<Value, Member>) -> Member {
-        getValue()[keyPath: keyPath]
+        value.wrappedValue[keyPath: keyPath]
     }
 }
 
 extension ReadOnlyConnectedStateProjection where Value: AnyObject {
     subscript<Member>(dynamicMember keyPath: ReferenceWritableKeyPath<Value, Member>) -> Binding<Member> {
-        Binding(
-            get: {
-                getValue()[keyPath: keyPath]
-            },
-            set: { newValue in
-                let value = getValue()
-                value[keyPath: keyPath] = newValue
-            }
-        )
+        value[dynamicMember: keyPath]
     }
 }
 
@@ -449,6 +441,6 @@ extension ReadOnlyConnectedStateProjection where Value: AnyObject {
 
     var projectedValue: Key.Projection {
         _ = scope.generation
-        return key.projection(for: host.node)
+        return key.projection(for: $host.connectedValue)
     }
 }
