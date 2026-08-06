@@ -12,16 +12,18 @@ enum ConnectedStateNoInput: Equatable {
 
 /// A live connection created for one SwiftUI location.
 /// Its closures retain any implementation object needed to keep the value alive.
-@MainActor
-struct ConnectedStateSession<Input: Equatable, Value> {
+@MainActor struct ConnectedStateSession<Input: Equatable, Value> {
     fileprivate let currentValue: @MainActor () -> Value
-    fileprivate let updates: AnyPublisher<Value, Never>
+
+    fileprivate let updates: any Publisher<Value, Never>
+
     fileprivate let setValue: (@MainActor (Value) -> Void)?
+
     fileprivate let updateInput: @MainActor (Input) -> Void
 
     init(
         currentValue: @escaping @MainActor () -> Value,
-        updates: AnyPublisher<Value, Never>,
+        updates: some Publisher<Value, Never>,
         setValue: (@MainActor (Value) -> Void)? = nil,
         updateInput: @escaping @MainActor (Input) -> Void = { _ in }
     ) {
@@ -34,12 +36,12 @@ struct ConnectedStateSession<Input: Equatable, Value> {
 
 protocol ConnectedStateSourceProtocol: SendableMetatype {
     associatedtype Input: Equatable
+
     associatedtype Value
 
     var identity: ObjectIdentifier { get }
 
-    @MainActor
-    func makeSession(input: Input) -> ConnectedStateSession<Input, Value>
+    @MainActor func makeSession(input: Input) -> ConnectedStateSession<Input, Value>
 }
 
 /// A read-only connection which needs no external input.
@@ -47,13 +49,14 @@ struct ConnectedStateConnection<Value>: ConnectedStateSourceProtocol {
     typealias Input = ConnectedStateNoInput
 
     @MainActor private let getCurrentValue: @MainActor () -> Value
-    @MainActor private let updates: AnyPublisher<Value, Never>
+
+    @MainActor private let updates: any Publisher<Value, Never>
+
     private let identityToken = ConnectedStateConnectionIdentity()
 
-    @MainActor
-    init(
+    @MainActor init(
         currentValue: @escaping @MainActor () -> Value,
-        updates: AnyPublisher<Value, Never>
+        updates: some Publisher<Value, Never>
     ) {
         self.getCurrentValue = currentValue
         self.updates = updates
@@ -63,10 +66,7 @@ struct ConnectedStateConnection<Value>: ConnectedStateSourceProtocol {
         ObjectIdentifier(identityToken)
     }
 
-    @MainActor
-    func makeSession(
-        input: ConnectedStateNoInput
-    ) -> ConnectedStateSession<ConnectedStateNoInput, Value> {
+    @MainActor func makeSession(input: ConnectedStateNoInput) -> ConnectedStateSession<ConnectedStateNoInput, Value> {
         ConnectedStateSession(
             currentValue: getCurrentValue,
             updates: updates
@@ -79,14 +79,16 @@ struct WritableConnectedStateConnection<Value>: ConnectedStateSourceProtocol {
     typealias Input = ConnectedStateNoInput
 
     @MainActor private let getCurrentValue: @MainActor () -> Value
-    @MainActor private let updates: AnyPublisher<Value, Never>
+
+    @MainActor private let updates: any Publisher<Value, Never>
+
     @MainActor private let setValue: @MainActor (Value) -> Void
+
     private let identityToken = ConnectedStateConnectionIdentity()
 
-    @MainActor
-    init(
+    @MainActor init(
         currentValue: @escaping @MainActor () -> Value,
-        updates: AnyPublisher<Value, Never>,
+        updates: some Publisher<Value, Never>,
         setValue: @escaping @MainActor (Value) -> Void
     ) {
         self.getCurrentValue = currentValue
@@ -98,10 +100,7 @@ struct WritableConnectedStateConnection<Value>: ConnectedStateSourceProtocol {
         ObjectIdentifier(identityToken)
     }
 
-    @MainActor
-    func makeSession(
-        input: ConnectedStateNoInput
-    ) -> ConnectedStateSession<ConnectedStateNoInput, Value> {
+    @MainActor func makeSession(input: ConnectedStateNoInput) -> ConnectedStateSession<ConnectedStateNoInput, Value> {
         ConnectedStateSession(
             currentValue: getCurrentValue,
             updates: updates,
@@ -112,14 +111,12 @@ struct WritableConnectedStateConnection<Value>: ConnectedStateSourceProtocol {
 
 /// An input-bearing connection recipe. The session it creates owns the resulting
 /// state until the SwiftUI location holding the session disappears.
-struct ConnectedStateFactory<Input: Equatable, Value>:
-    ConnectedStateSourceProtocol
-{
+struct ConnectedStateFactory<Input: Equatable, Value>: ConnectedStateSourceProtocol {
     private let identityToken = ConnectedStateConnectionIdentity()
+
     private let connect: @MainActor (Input) -> ConnectedStateSession<Input, Value>
 
-    @MainActor
-    init(
+    @MainActor init(
         _ connect: @escaping @MainActor (Input) -> ConnectedStateSession<Input, Value>
     ) {
         self.connect = connect
@@ -129,8 +126,7 @@ struct ConnectedStateFactory<Input: Equatable, Value>:
         ObjectIdentifier(identityToken)
     }
 
-    @MainActor
-    func makeSession(input: Input) -> ConnectedStateSession<Input, Value> {
+    @MainActor func makeSession(input: Input) -> ConnectedStateSession<Input, Value> {
         connect(input)
     }
 }
@@ -139,9 +135,9 @@ struct ConnectedStateFactory<Input: Equatable, Value>:
 
 /// The observable endpoint used both by connected properties and as the exact
 /// scope type stored in SwiftUI's environment.
-@MainActor @Observable
-final class ConnectionNode<Value> {
+@MainActor @Observable final class ConnectionNode<Value> {
     private(set) var value: Value?
+
     private(set) var generation = 0
 
     @ObservationIgnored private var setValue: (@MainActor (Value) -> Void)?
@@ -172,13 +168,15 @@ final class ConnectionNode<Value> {
 
 /// The single, fully typed lifecycle owner used for ordinary state and scopes.
 /// Its source, input, session, and output types remain known after connection.
-@MainActor
-private final class ConnectionHost<Source: ConnectedStateSourceProtocol> {
+@MainActor private final class ConnectionHost<Source: ConnectedStateSourceProtocol> {
     let node = ConnectionNode<Source.Value>()
 
     private var sourceIdentity: ObjectIdentifier?
+
     private var input: Source.Input?
+
     private var session: ConnectedStateSession<Source.Input, Source.Value>?
+
     private var subscription: AnyCancellable?
 
     func connectIfNeeded(to source: Source, input: Source.Input) {
@@ -199,6 +197,7 @@ private final class ConnectionHost<Source: ConnectedStateSourceProtocol> {
         node.receive(session.currentValue())
 
         subscription = session.updates
+            .eraseToAnyPublisher()
             .receive(on: DispatchQueue.main)
             .sink { [weak self] value in
                 guard self?.sourceIdentity == sourceIdentity else {
@@ -221,11 +220,11 @@ private final class ConnectionHost<Source: ConnectedStateSourceProtocol> {
 
 // MARK: - Typed scope injection
 
-@MainActor @propertyWrapper
-private struct ResolvedConnection<Source: ConnectedStateSourceProtocol>: DynamicProperty {
+@MainActor @propertyWrapper private struct ResolvedConnection<Source: ConnectedStateSourceProtocol>: DynamicProperty {
     @State private var host = ConnectionHost<Source>()
 
     private let source: Source
+
     private let input: Source.Input
 
     init(source: Source, input: Source.Input) {
@@ -244,10 +243,8 @@ private struct ResolvedConnection<Source: ConnectedStateSourceProtocol>: Dynamic
 
 /// The modifier is generic over the concrete scope type, never the container
 /// implementation which produced its connection.
-@MainActor
-private struct ConnectedStateScopeModifier<Scope>: ViewModifier {
-    @ResolvedConnection<ConnectedStateConnection<Scope>>
-    private var scope: ConnectionNode<Scope>
+@MainActor private struct ConnectedStateScopeModifier<Scope>: ViewModifier {
+    @ResolvedConnection<ConnectedStateConnection<Scope>> private var scope: ConnectionNode<Scope>
 
     init(_ connection: ConnectedStateConnection<Scope>) {
         self._scope = ResolvedConnection(
@@ -264,29 +261,20 @@ private struct ConnectedStateScopeModifier<Scope>: ViewModifier {
 extension View {
     /// Injects one statically known scope. The concrete object producing the scope
     /// is hidden behind `ConnectedStateConnection<Scope>`.
-    @MainActor
-    func inject<Scope>(
-        _ scope: ConnectedStateConnection<Scope>
-    ) -> some View {
+    @MainActor func inject<Scope>(_ scope: ConnectedStateConnection<Scope>) -> some View {
         modifier(ConnectedStateScopeModifier(scope))
     }
 }
 
 // MARK: - Connected child scopes
 
-@MainActor @propertyWrapper
-private struct ResolvedConnectedScope<
-    ParentScope,
-    Input: Equatable,
-    Scope
->: DynamicProperty {
+@MainActor @propertyWrapper private struct ResolvedConnectedScope<ParentScope, Input: Equatable, Scope>: DynamicProperty {
     @Environment private var parentScope: ConnectionNode<ParentScope>
+
     @State private var host = ConnectionHost<ConnectedStateFactory<Input, Scope>>()
 
-    private let factory: KeyPath<
-        ParentScope,
-        ConnectedStateFactory<Input, Scope>
-    >
+    private let factory: KeyPath<ParentScope, ConnectedStateFactory<Input, Scope>>
+
     private let input: Input
 
     init(
@@ -312,14 +300,8 @@ private struct ResolvedConnectedScope<
     }
 }
 
-@MainActor
-private struct ConnectedScopeModifier<
-    ParentScope,
-    Input: Equatable,
-    Scope
->: ViewModifier {
-    @ResolvedConnectedScope<ParentScope, Input, Scope>
-    private var scope: ConnectionNode<Scope>
+@MainActor private struct ConnectedScopeModifier<ParentScope, Input: Equatable, Scope>: ViewModifier {
+    @ResolvedConnectedScope<ParentScope, Input, Scope> private var scope: ConnectionNode<Scope>
 
     init(
         factory: KeyPath<ParentScope, ConnectedStateFactory<Input, Scope>>,
@@ -337,12 +319,7 @@ extension View {
     /// Connects an input-bearing scope at this SwiftUI location. The live session
     /// retains any state or container created by the factory until the location
     /// disappears.
-    @MainActor
-    func scope<
-        ParentScope,
-        Input: Equatable,
-        Scope
-    >(
+    @MainActor func scope<ParentScope, Input: Equatable, Scope>(
         _ factory: KeyPath<ParentScope, ConnectedStateFactory<Input, Scope>>,
         input: Input
     ) -> some View {
@@ -354,42 +331,34 @@ extension View {
 
 protocol ConnectedStateKeyProtocol {
     associatedtype Scope
-    associatedtype Connection: ConnectedStateSourceProtocol
-        where Connection.Input == ConnectedStateNoInput
+
+    associatedtype Connection: ConnectedStateSourceProtocol where Connection.Input == ConnectedStateNoInput
+
     associatedtype Projection
 
     var keyPath: KeyPath<Scope, Connection> { get }
 
-    @MainActor
-    func projection(for node: ConnectionNode<Connection.Value>) -> Projection
+    @MainActor func projection(for node: ConnectionNode<Connection.Value>) -> Projection
 }
 
-struct ReadOnlyConnectedStateKey<Scope, Value>:
-    ConnectedStateKeyProtocol
-{
+struct ReadOnlyConnectedStateKey<Scope, Value>: ConnectedStateKeyProtocol {
     typealias Connection = ConnectedStateConnection<Value>
 
     let keyPath: KeyPath<Scope, ConnectedStateConnection<Value>>
 
-    @MainActor
-    func projection(
-        for node: ConnectionNode<Value>
-    ) -> ReadOnlyConnectedStateProjection<Value> {
+    @MainActor func projection(for node: ConnectionNode<Value>) -> ReadOnlyConnectedStateProjection<Value> {
         ReadOnlyConnectedStateProjection {
             node.requiredValue
         }
     }
 }
 
-struct WritableConnectedStateKey<Scope, Value>:
-    ConnectedStateKeyProtocol
-{
+struct WritableConnectedStateKey<Scope, Value>: ConnectedStateKeyProtocol {
     typealias Connection = WritableConnectedStateConnection<Value>
 
     let keyPath: KeyPath<Scope, WritableConnectedStateConnection<Value>>
 
-    @MainActor
-    func projection(for node: ConnectionNode<Value>) -> Binding<Value> {
+    @MainActor func projection(for node: ConnectionNode<Value>) -> Binding<Value> {
         Binding(
             get: { node.requiredValue },
             set: { node.send($0) }
@@ -397,25 +366,20 @@ struct WritableConnectedStateKey<Scope, Value>:
     }
 }
 
-@MainActor @dynamicMemberLookup
-struct ReadOnlyConnectedStateProjection<Value> {
+@MainActor @dynamicMemberLookup struct ReadOnlyConnectedStateProjection<Value> {
     private let getValue: @MainActor () -> Value
 
     fileprivate init(getValue: @escaping @MainActor () -> Value) {
         self.getValue = getValue
     }
 
-    subscript<Member>(
-        dynamicMember keyPath: KeyPath<Value, Member>
-    ) -> Member {
+    subscript<Member>(dynamicMember keyPath: KeyPath<Value, Member>) -> Member {
         getValue()[keyPath: keyPath]
     }
 }
 
 extension ReadOnlyConnectedStateProjection where Value: AnyObject {
-    subscript<Member>(
-        dynamicMember keyPath: ReferenceWritableKeyPath<Value, Member>
-    ) -> Binding<Member> {
+    subscript<Member>(dynamicMember keyPath: ReferenceWritableKeyPath<Value, Member>) -> Binding<Member> {
         Binding(
             get: {
                 getValue()[keyPath: keyPath]
@@ -430,9 +394,9 @@ extension ReadOnlyConnectedStateProjection where Value: AnyObject {
 
 // MARK: - Connected state dynamic property
 
-@MainActor @propertyWrapper
-struct ConnectedState<Key: ConnectedStateKeyProtocol>: DynamicProperty {
+@MainActor @propertyWrapper struct ConnectedState<Key: ConnectedStateKeyProtocol>: DynamicProperty {
     @Environment private var scope: ConnectionNode<Key.Scope>
+
     @State private var host = ConnectionHost<Key.Connection>()
 
     private let key: Key

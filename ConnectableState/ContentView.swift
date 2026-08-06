@@ -36,11 +36,8 @@ struct ContentView: View {
                 Text("Container-scoped connected state")
                     .font(.largeTitle.bold())
 
-                Text(
-                    "The window injects statically known scope connections. This product subtree "
-                        + "connects a child scope whose live state retains its ID-aware container."
-                )
-                .foregroundStyle(.secondary)
+                Text("The window injects statically known scope connections. This product subtree connects a child scope whose live state retains its ID-aware container.")
+                    .foregroundStyle(.secondary)
 
                 AppContainerDiagnostics()
 
@@ -253,8 +250,7 @@ struct ProductDetailSnapshot: Equatable {
         let scope = container.scope
         return ConnectedStateSession(
             currentValue: { scope },
-            updates: Empty<ProductScope, Never>(completeImmediately: false)
-                .eraseToAnyPublisher(),
+            updates: Empty<ProductScope, Never>(completeImmediately: false),
             updateInput: { container.update(input: $0) }
         )
     }
@@ -264,7 +260,6 @@ struct ProductDetailSnapshot: Equatable {
     lazy var appScope = ConnectedStateConnection(
         currentValue: { [unowned self] in self.appScopeValue },
         updates: Empty<AppScope, Never>(completeImmediately: false)
-            .eraseToAnyPublisher()
     )
 
     lazy var diagnosticsScope = ConnectedStateConnection(
@@ -273,12 +268,10 @@ struct ProductDetailSnapshot: Equatable {
                 containerID: ConnectedStateConnection(
                     currentValue: { self.containerID },
                     updates: Empty<UUID, Never>(completeImmediately: false)
-                        .eraseToAnyPublisher()
                 )
             )
         },
         updates: Empty<AppDiagnosticsScope, Never>(completeImmediately: false)
-            .eraseToAnyPublisher()
     )
 
     func buy(id productID: Int) {
@@ -297,16 +290,16 @@ struct ProductDetailSnapshot: Equatable {
         orderSubject(for: productID).value
     }
 
-    func orderUpdates(id productID: Int) -> AnyPublisher<OrderState, Never> {
-        orderSubject(for: productID).eraseToAnyPublisher()
+    func orderUpdates(id productID: Int) -> some Publisher<OrderState, Never> {
+        orderSubject(for: productID)
     }
 
     func isFavorite(id productID: Int) -> Bool {
         favoriteSubject(for: productID).value
     }
 
-    func favoriteUpdates(id productID: Int) -> AnyPublisher<Bool, Never> {
-        favoriteSubject(for: productID).eraseToAnyPublisher()
+    func favoriteUpdates(id productID: Int) -> some Publisher<Bool, Never> {
+        favoriteSubject(for: productID)
     }
 
     private func orderSubject(for productID: Int) -> CurrentValueSubject<OrderState, Never> {
@@ -414,25 +407,25 @@ struct ProductDetailSnapshot: Equatable {
         ProductScope(
             orderState: WritableConnectedStateConnection(
                 currentValue: { self.orderSubject.value },
-                updates: orderSubject.eraseToAnyPublisher(),
+                updates: orderSubject,
                 setValue: { self.setOrderState($0) }
             ),
             snapshot: ConnectedStateConnection(
                 currentValue: { self.snapshot },
-                updates: snapshotSubject.eraseToAnyPublisher()
+                updates: snapshotSubject
             ),
             isAvailable: ConnectedStateConnection(
                 currentValue: { self.availabilitySubject.value },
-                updates: availabilitySubject.eraseToAnyPublisher()
+                updates: availabilitySubject
             ),
             isFavorite: WritableConnectedStateConnection(
                 currentValue: { self.favoriteSubject.value },
-                updates: favoriteSubject.eraseToAnyPublisher(),
+                updates: favoriteSubject,
                 setValue: { self.setFavorite($0) }
             ),
             options: ConnectedStateConnection(
                 currentValue: { self.options },
-                updates: Empty(completeImmediately: false).eraseToAnyPublisher()
+                updates: Empty(completeImmediately: false)
             )
         )
     }
