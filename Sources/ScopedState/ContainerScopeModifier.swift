@@ -7,6 +7,21 @@
 
 import SwiftUI
 
+/// Adapts an externally owned container to the scope type stored in the
+/// environment. The concrete container type does not escape this modifier.
+@MainActor private struct ContainerScopeModifier<Container: AnyObject, Scope>: ViewModifier {
+    @ContainerScopeProvider<Container, Scope> private var scope: ScopedStateStorage<Scope>
+
+    init(container: Container, scope keyPath: KeyPath<Container, Scope>) {
+        self._scope = ContainerScopeProvider(container: container, keyPath: keyPath)
+    }
+
+    func body(content: Content) -> some View {
+        content
+            .environment(scope)
+    }
+}
+
 @MainActor @propertyWrapper private struct ContainerScopeProvider<Container: AnyObject, Scope>: @MainActor DynamicProperty {
     @MainActor private final class Storage {
         let scope = ScopedStateStorage<Scope>()
@@ -34,21 +49,6 @@ import SwiftUI
 
     var wrappedValue: ScopedStateStorage<Scope> {
         storage.scope
-    }
-}
-
-/// Adapts an externally owned container to the scope type stored in the
-/// environment. The concrete container type does not escape this modifier.
-@MainActor private struct ContainerScopeModifier<Container: AnyObject, Scope>: ViewModifier {
-    @ContainerScopeProvider<Container, Scope> private var scope: ScopedStateStorage<Scope>
-
-    init(container: Container, scope keyPath: KeyPath<Container, Scope>) {
-        self._scope = ContainerScopeProvider(container: container, keyPath: keyPath)
-    }
-
-    func body(content: Content) -> some View {
-        content
-            .environment(scope)
     }
 }
 
