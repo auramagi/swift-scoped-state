@@ -42,7 +42,7 @@ import SwiftUI
             return
         }
 
-        storage.scope.receive(container[keyPath: keyPath])
+        storage.scope.value = container[keyPath: keyPath]
         storage.container = container
         storage.keyPath = keyPath
     }

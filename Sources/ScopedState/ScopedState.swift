@@ -13,7 +13,7 @@ import SwiftUI
 
 final class IdentityToken {}
 
-/// A live connection created for one SwiftUI location.
+/// A live connection created for one position in the SwiftUI view tree.
 /// Its closures retain any implementation object needed to keep the value alive.
 @MainActor public struct ConnectionSession<Configuration, Value> {
     let currentValue: @MainActor () -> Value
@@ -48,7 +48,7 @@ final class IdentityToken {}
     }
 }
 
-/// A live writable connection created for one SwiftUI location.
+/// A live writable connection created for one position in the SwiftUI view tree.
 /// Its setter is required, so writable connections cannot be constructed
 /// without root replacement support.
 @MainActor public struct WritableConnectionSession<Configuration, Value> {
@@ -87,35 +87,18 @@ public protocol ConnectedValue {
 
     associatedtype Projection
 
-    @MainActor static func makeProjection(
-        readOnly: ScopedStateProjection<WrappedValue>,
-        writable: Binding<WrappedValue>
-    ) -> Projection
+    @MainActor static func transformProjection(_ projection: ScopedStateProjection<WrappedValue>) -> Projection
 }
 
-public enum ReadOnlyConnectedValue<Value>: ConnectedValue {
-    public typealias WrappedValue = Value
-
-    public typealias Projection = ScopedStateProjection<Value>
-
-    @MainActor public static func makeProjection(
-        readOnly: ScopedStateProjection<Value>,
-        writable: Binding<Value>
-    ) -> ScopedStateProjection<Value> {
-        readOnly
+public enum ReadOnlyConnectedValue<WrappedValue>: ConnectedValue {
+    @MainActor public static func transformProjection(_ projection: ScopedStateProjection<WrappedValue>) -> ScopedStateProjection<WrappedValue> {
+        projection
     }
 }
 
-public enum WritableConnectedValue<Value>: ConnectedValue {
-    public typealias WrappedValue = Value
-
-    public typealias Projection = Binding<Value>
-
-    @MainActor public static func makeProjection(
-        readOnly: ScopedStateProjection<Value>,
-        writable: Binding<Value>
-    ) -> Binding<Value> {
-        writable
+public enum WritableConnectedValue<WrappedValue>: ConnectedValue {
+    @MainActor public static func transformProjection(_ projection: ScopedStateProjection<WrappedValue>) -> Binding<WrappedValue> {
+        projection.rootBinding
     }
 }
 
@@ -258,7 +241,7 @@ extension ConnectionDefinition where ConnectionConfiguration == Void {
 /// The observable value storage used both by connected properties and as the
 /// exact scope type stored in SwiftUI's environment.
 @MainActor @Observable final class ScopedStateStorage<Value> {
-    private var value: Value?
+    var value: Value?
 
     var requiredValue: Value {
         if let value {
@@ -267,176 +250,180 @@ extension ConnectionDefinition where ConnectionConfiguration == Void {
             preconditionFailure("Scoped state was read before DynamicProperty.update()")
         }
     }
-
-    func receive(_ value: Value) {
-        self.value = value
-    }
-}
-
-/// The single, fully typed lifecycle owner used for ordinary state and scopes.
-/// Its source, configuration, session, and value types remain known after connection.
-@MainActor final class ConnectionHost<Configuration, Value> {
-    let storage = ScopedStateStorage<Value>()
-
-    private var sourceIdentity: ObjectIdentifier?
-
-    private var configuration: Configuration?
-
-    private var session: ConnectionSession<Configuration, Value>?
-
-    private var subscription: AnyCancellable?
-
-    func connectIfNeeded<Connected: ConnectedValue>(
-        to source: ConnectionDefinition<Configuration, Connected>,
-        configuration: Configuration
-    ) where Connected.WrappedValue == Value {
-        let sourceIdentity = source.identity
-
-        guard self.sourceIdentity != sourceIdentity else {
-            updateConfigurationIfNeeded(configuration, source: source)
-            return
-        }
-
-        let session = source.makeSession(configuration: configuration)
-        subscription?.cancel()
-
-        self.sourceIdentity = sourceIdentity
-        self.configuration = configuration
-        self.session = session
-        storage.receive(session.currentValue())
-
-        subscription = session.updates
-            .eraseToAnyPublisher()
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] value in
-                guard self?.sourceIdentity == sourceIdentity else {
-                    return
-                }
-                self?.storage.receive(value)
-            }
-    }
-
-    private func updateConfigurationIfNeeded<Connected: ConnectedValue>(
-        _ configuration: Configuration,
-        source: ConnectionDefinition<Configuration, Connected>
-    ) where Connected.WrappedValue == Value {
-        guard
-            let previousConfiguration = self.configuration,
-            !source.configurationsAreEqual(previousConfiguration, configuration),
-            let session
-        else {
-            return
-        }
-
-        self.configuration = configuration
-        session.updateConfiguration(configuration)
-        storage.receive(session.currentValue())
-    }
-
-    subscript<Member>(member keyPath: ReferenceWritableKeyPath<Value, Member>) -> Member {
-        get {
-            storage.requiredValue[keyPath: keyPath]
-        }
-        set {
-            storage.requiredValue[keyPath: keyPath] = newValue
-        }
-    }
-}
-
-extension ConnectionHost {
-    var replaceableValue: Value {
-        get { storage.requiredValue }
-        set { replace(with: newValue) }
-    }
-
-    private func replace(with value: Value) {
-        guard let session else {
-            preconditionFailure("Scoped state was written before DynamicProperty.update()")
-        }
-
-        guard let setValue = session.setValue else {
-            preconditionFailure("A writable connection session must provide a setter")
-        }
-
-        setValue(value)
-    }
 }
 
 // MARK: - Scoped state projections
 
-@MainActor private protocol ScopedStateProjectionLocation<Value> {
-    associatedtype Value
+@MainActor fileprivate protocol ScopedStateProjectionSource<WrappedValue> {
+    associatedtype WrappedValue
 
-    func memberBinding<Member>(_ keyPath: ReferenceWritableKeyPath<Value, Member>) -> Binding<Member>
-}
-
-/// The SwiftUI-owned location from which `ScopedState` derives its projection.
-@MainActor private struct ScopedStateLocation<Configuration, Value>: ScopedStateProjectionLocation {
-    fileprivate let host: Binding<ConnectionHost<Configuration, Value>>
+    var rootBinding: Binding<WrappedValue> { get }
 
     func memberBinding<Member>(
-        _ keyPath: ReferenceWritableKeyPath<Value, Member>
-    ) -> Binding<Member> {
-        host[dynamicMember: \ConnectionHost<Configuration, Value>.[member: keyPath]]
-    }
+        _ keyPath: ReferenceWritableKeyPath<WrappedValue, Member>
+    ) -> Binding<Member>
 }
 
 @MainActor @dynamicMemberLookup public struct ScopedStateProjection<Value> {
-    private let location: any ScopedStateProjectionLocation<Value>
+    private let source: any ScopedStateProjectionSource<Value>
 
-    fileprivate init<Location: ScopedStateProjectionLocation<Value>>(location: Location) {
-        self.location = location
+    fileprivate init<Source: ScopedStateProjectionSource<Value>>(source: Source) {
+        self.source = source
+    }
+
+    fileprivate var rootBinding: Binding<Value> {
+        source.rootBinding
     }
 
     public subscript<Member>(dynamicMember keyPath: ReferenceWritableKeyPath<Value, Member>) -> Binding<Member> {
-        location.memberBinding(keyPath)
+        source.memberBinding(keyPath)
     }
 }
 
 // MARK: - Scoped state dynamic property
 
-@MainActor @propertyWrapper public struct ScopedState<Scope, Configuration, Connected: ConnectedValue>: @MainActor DynamicProperty {
+@MainActor @propertyWrapper public struct ScopedState<Scope, Configuration, Value: ConnectedValue>: @MainActor DynamicProperty {
+    @MainActor private final class Storage {
+        var value = ScopedStateStorage<Value.WrappedValue>()
+
+        var sourceIdentity: ObjectIdentifier?
+
+        var configuration: Configuration?
+
+        var session: ConnectionSession<Configuration, Value.WrappedValue>?
+
+        var subscription: AnyCancellable?
+
+        var replaceableValue: Value.WrappedValue {
+            get {
+                value.requiredValue
+            }
+            set {
+                guard let session else {
+                    preconditionFailure("Scoped state was written before DynamicProperty.update()")
+                }
+
+                guard let setValue = session.setValue else {
+                    preconditionFailure("A writable connection session must provide a setter")
+                }
+
+                setValue(newValue)
+            }
+        }
+
+        subscript<Member>(member keyPath: ReferenceWritableKeyPath<Value.WrappedValue, Member>) -> Member {
+            get {
+                value.requiredValue[keyPath: keyPath]
+            }
+            set {
+                value.requiredValue[keyPath: keyPath] = newValue
+            }
+        }
+    }
+
+    @MainActor private struct ProjectionSource: ScopedStateProjectionSource {
+        typealias WrappedValue = Value.WrappedValue
+
+        let storage: Binding<Storage>
+
+        var rootBinding: Binding<WrappedValue> {
+            storage.replaceableValue
+        }
+
+        func memberBinding<Member>(
+            _ keyPath: ReferenceWritableKeyPath<WrappedValue, Member>
+        ) -> Binding<Member> {
+            storage[dynamicMember: \Storage.[member: keyPath]]
+        }
+    }
+
     @Environment(ScopedStateStorage<Scope>.self) private var scope
 
-    @State private var host = ConnectionHost<Configuration, Connected.WrappedValue>()
+    @State private var storage: Storage
 
-    private let keyPath: KeyPath<Scope, ConnectionDefinition<Configuration, Connected>>
+    private let keyPath: KeyPath<Scope, ConnectionDefinition<Configuration, Value>>
 
     private let configuration: Configuration
 
     public init(
-        _ keyPath: KeyPath<Scope, ConnectionDefinition<Void, Connected>>
+        _ keyPath: KeyPath<Scope, ConnectionDefinition<Void, Value>>
     ) where Configuration == Void {
         self.init(keyPath, configuration: ())
     }
 
     public init(
-        _ keyPath: KeyPath<Scope, ConnectionDefinition<Configuration, Connected>>,
+        _ keyPath: KeyPath<Scope, ConnectionDefinition<Configuration, Value>>,
         configuration: Configuration
     ) {
+        self._storage = State(initialValue: Storage())
         self.keyPath = keyPath
         self.configuration = configuration
     }
 
     public func update() {
-        host.connectIfNeeded(
+        connectIfNeeded(
             to: scope.requiredValue[keyPath: keyPath],
             configuration: configuration
         )
     }
 
-    var storage: ScopedStateStorage<Connected.WrappedValue> {
-        host.storage
+    var valueStorage: ScopedStateStorage<Value.WrappedValue> {
+        storage.value
     }
 
-    public var wrappedValue: Connected.WrappedValue {
-        host.storage.requiredValue
+    public var wrappedValue: Value.WrappedValue {
+        storage.value.requiredValue
     }
 
-    public var projectedValue: Connected.Projection {
-        Connected.makeProjection(
-            readOnly: ScopedStateProjection(location: ScopedStateLocation(host: $host)),
-            writable: $host.replaceableValue
-        )
+    public var projectedValue: Value.Projection {
+        let projection = ScopedStateProjection(source: ProjectionSource(storage: $storage))
+        return Value.transformProjection(projection)
+    }
+
+    private func connectIfNeeded(
+        to source: ConnectionDefinition<Configuration, Value>,
+        configuration: Configuration
+    ) {
+        let sourceIdentity = source.identity
+
+        guard storage.sourceIdentity != sourceIdentity else {
+            updateConfigurationIfNeeded(configuration, source: source)
+            return
+        }
+
+        let session = source.makeSession(configuration: configuration)
+        storage.subscription?.cancel()
+
+        storage.sourceIdentity = sourceIdentity
+        storage.configuration = configuration
+        storage.session = session
+        storage.value.value = session.currentValue()
+
+        storage.subscription = session.updates
+            .eraseToAnyPublisher()
+            .receive(on: DispatchQueue.main)
+            .sink { [weak storage] value in
+                guard storage?.sourceIdentity == sourceIdentity else {
+                    return
+                }
+                storage?.value.value = value
+            }
+    }
+
+    private func updateConfigurationIfNeeded(
+        _ configuration: Configuration,
+        source: ConnectionDefinition<Configuration, Value>
+    ) {
+        guard
+            let previousConfiguration = storage.configuration,
+            !source.configurationsAreEqual(previousConfiguration, configuration),
+            let session = storage.session
+        else {
+            return
+        }
+
+        storage.configuration = configuration
+        session.updateConfiguration(configuration)
+        storage.value.value = session.currentValue()
     }
 }

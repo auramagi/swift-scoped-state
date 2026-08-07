@@ -18,23 +18,22 @@ import SwiftUI
     }
 
     func body(content: Content) -> some View {
-        content.environment(_scope.storage)
+        content.environment(_scope.valueStorage)
     }
 }
 
 extension View {
-    /// Connects a scope without configuration at this SwiftUI location. The live session
-    /// retains any state or container created by the connection until the location
-    /// disappears.
+    /// Connects a scope without configuration at this point in the SwiftUI view tree. The
+    /// live session retains any state or container created by the connection until the
+    /// subtree disappears.
     @MainActor public func scope<ParentScope, Connected: ConnectedValue>(
         _ connection: KeyPath<ParentScope, ConnectionDefinition<Void, Connected>>
     ) -> some View {
         scope(connection, configuration: ())
     }
 
-    /// Connects a configured scope at this SwiftUI location. The live session
-    /// retains any state or container created by the connection until the location
-    /// disappears.
+    /// Connects a configured scope at this point in the SwiftUI view tree. The live session
+    /// retains any state or container created by the connection until the subtree disappears.
     @MainActor public func scope<ParentScope, Configuration, Connected: ConnectedValue>(
         _ connection: KeyPath<ParentScope, ConnectionDefinition<Configuration, Connected>>,
         configuration: Configuration
