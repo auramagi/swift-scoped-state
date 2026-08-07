@@ -10,75 +10,6 @@ import SwiftUI
 
 final class IdentityToken {}
 
-/// A live connection created for one position in the SwiftUI view tree.
-/// Its closures retain any implementation object needed to keep the value alive.
-@MainActor public struct ConnectionSession<Configuration, Value> {
-    let currentValue: @MainActor () -> Value
-
-    let updates: any Publisher<Value, Never>
-
-    let setValue: (@MainActor (Value) -> Void)?
-
-    let updateConfiguration: @MainActor (Configuration) -> Void
-
-    public init(
-        currentValue: @escaping @MainActor () -> Value,
-        updates: any Publisher<Value, Never>,
-        updateConfiguration: @escaping @MainActor (Configuration) -> Void = { _ in }
-    ) {
-        self.currentValue = currentValue
-        self.updates = updates
-        self.setValue = nil
-        self.updateConfiguration = updateConfiguration
-    }
-
-    init(
-        currentValue: @escaping @MainActor () -> Value,
-        updates: any Publisher<Value, Never>,
-        setValue: @escaping @MainActor (Value) -> Void,
-        updateConfiguration: @escaping @MainActor (Configuration) -> Void
-    ) {
-        self.currentValue = currentValue
-        self.updates = updates
-        self.setValue = setValue
-        self.updateConfiguration = updateConfiguration
-    }
-}
-
-/// A live writable connection created for one position in the SwiftUI view tree.
-/// Its setter is required, so writable connections cannot be constructed
-/// without root replacement support.
-@MainActor public struct WritableConnectionSession<Configuration, Value> {
-    let currentValue: @MainActor () -> Value
-
-    let updates: any Publisher<Value, Never>
-
-    let setValue: @MainActor (Value) -> Void
-
-    let updateConfiguration: @MainActor (Configuration) -> Void
-
-    public init(
-        currentValue: @escaping @MainActor () -> Value,
-        updates: any Publisher<Value, Never>,
-        setValue: @escaping @MainActor (Value) -> Void,
-        updateConfiguration: @escaping @MainActor (Configuration) -> Void = { _ in }
-    ) {
-        self.currentValue = currentValue
-        self.updates = updates
-        self.setValue = setValue
-        self.updateConfiguration = updateConfiguration
-    }
-
-    var connectionSession: ConnectionSession<Configuration, Value> {
-        ConnectionSession(
-            currentValue: currentValue,
-            updates: updates,
-            setValue: setValue,
-            updateConfiguration: updateConfiguration
-        )
-    }
-}
-
 public protocol ConnectedValue {
     associatedtype WrappedValue
 
@@ -101,19 +32,70 @@ public enum WritableConnectedValue<WrappedValue>: ConnectedValue {
 
 /// The generic implementation underlying the public `Connection<Value>` family.
 @MainActor public struct ConnectionDefinition<ConnectionConfiguration, Connected: ConnectedValue> {
+    /// A live connection created for one position in the SwiftUI view tree.
+    /// Its closures retain any implementation object needed to keep the value alive.
+    @MainActor public struct Session {
+        let currentValue: @MainActor () -> Connected.WrappedValue
+
+        let updates: any Publisher<Connected.WrappedValue, Never>
+
+        let setValue: (@MainActor (Connected.WrappedValue) -> Void)?
+
+        let updateConfiguration: @MainActor (ConnectionConfiguration) -> Void
+
+        private init(
+            currentValue: @escaping @MainActor () -> Connected.WrappedValue,
+            updates: any Publisher<Connected.WrappedValue, Never>,
+            storedSetValue: (@MainActor (Connected.WrappedValue) -> Void)?,
+            updateConfiguration: @escaping @MainActor (ConnectionConfiguration) -> Void
+        ) {
+            self.currentValue = currentValue
+            self.updates = updates
+            self.setValue = storedSetValue
+            self.updateConfiguration = updateConfiguration
+        }
+
+        public init<Value>(
+            currentValue: @escaping @MainActor () -> Value,
+            updates: any Publisher<Value, Never>,
+            updateConfiguration: @escaping @MainActor (ConnectionConfiguration) -> Void = { _ in }
+        ) where Connected == ReadOnlyConnectedValue<Value> {
+            self.init(
+                currentValue: currentValue,
+                updates: updates,
+                storedSetValue: nil,
+                updateConfiguration: updateConfiguration
+            )
+        }
+
+        public init<Value>(
+            currentValue: @escaping @MainActor () -> Value,
+            updates: any Publisher<Value, Never>,
+            setValue: @escaping @MainActor (Value) -> Void,
+            updateConfiguration: @escaping @MainActor (ConnectionConfiguration) -> Void = { _ in }
+        ) where Connected == WritableConnectedValue<Value> {
+            self.init(
+                currentValue: currentValue,
+                updates: updates,
+                storedSetValue: setValue,
+                updateConfiguration: updateConfiguration
+            )
+        }
+    }
+
     public typealias Configuration<NewConfiguration> = ConnectionDefinition<NewConfiguration, Connected>
 
     public typealias Writable = ConnectionDefinition<ConnectionConfiguration, WritableConnectedValue<Connected.WrappedValue>>
 
     let configurationsEqual: @MainActor (ConnectionConfiguration, ConnectionConfiguration) -> Bool
 
-    let createSession: @MainActor (ConnectionConfiguration) -> ConnectionSession<ConnectionConfiguration, Connected.WrappedValue>
+    let createSession: @MainActor (ConnectionConfiguration) -> Session
 
     let identityToken = IdentityToken()
 
     private init(
         configurationsEqual: @escaping @MainActor (ConnectionConfiguration, ConnectionConfiguration) -> Bool,
-        createSession: @escaping @MainActor (ConnectionConfiguration) -> ConnectionSession<ConnectionConfiguration, Connected.WrappedValue>
+        createSession: @escaping @MainActor (ConnectionConfiguration) -> Session
     ) {
         self.configurationsEqual = configurationsEqual
         self.createSession = createSession
@@ -132,7 +114,7 @@ public enum WritableConnectedValue<WrappedValue>: ConnectedValue {
 
     @MainActor public func makeSession(
         configuration: ConnectionConfiguration
-    ) -> ConnectionSession<ConnectionConfiguration, Connected.WrappedValue> {
+    ) -> Session {
         createSession(configuration)
     }
 }
@@ -140,10 +122,10 @@ public enum WritableConnectedValue<WrappedValue>: ConnectedValue {
 public typealias Connection<Value> = ConnectionDefinition<Void, ReadOnlyConnectedValue<Value>>
 
 extension ConnectionDefinition {
-    public init<Value>(
+    public init(
         configurationsAreEqual: @escaping @MainActor (ConnectionConfiguration, ConnectionConfiguration) -> Bool,
-        createSession: @escaping @MainActor (ConnectionConfiguration) -> ConnectionSession<ConnectionConfiguration, Value>
-    ) where Connected == ReadOnlyConnectedValue<Value> {
+        createSession: @escaping @MainActor (ConnectionConfiguration) -> Session
+    ) {
         self.init(
             configurationsEqual: configurationsAreEqual,
             createSession: createSession
@@ -152,9 +134,9 @@ extension ConnectionDefinition {
 }
 
 extension ConnectionDefinition where ConnectionConfiguration: Equatable {
-    public init<Value>(
-        createSession: @escaping @MainActor (ConnectionConfiguration) -> ConnectionSession<ConnectionConfiguration, Value>
-    ) where Connected == ReadOnlyConnectedValue<Value> {
+    public init(
+        createSession: @escaping @MainActor (ConnectionConfiguration) -> Session
+    ) {
         self.init(
             configurationsAreEqual: { $0 == $1 },
             createSession: createSession
@@ -163,9 +145,9 @@ extension ConnectionDefinition where ConnectionConfiguration: Equatable {
 }
 
 extension ConnectionDefinition where ConnectionConfiguration == Void {
-    public init<Value>(
-        createSession: @escaping @MainActor () -> ConnectionSession<Void, Value>
-    ) where Connected == ReadOnlyConnectedValue<Value> {
+    public init(
+        createSession: @escaping @MainActor () -> Session
+    ) {
         self.init(
             configurationsAreEqual: { _, _ in true },
             createSession: { _ in createSession() }
@@ -177,45 +159,11 @@ extension ConnectionDefinition where ConnectionConfiguration == Void {
         updates: any Publisher<Value, Never>
     ) where Connected == ReadOnlyConnectedValue<Value> {
         self.init {
-            ConnectionSession(
+            Session(
                 currentValue: currentValue,
                 updates: updates
             )
         }
-    }
-}
-
-extension ConnectionDefinition {
-    public init<Value>(
-        configurationsAreEqual: @escaping @MainActor (ConnectionConfiguration, ConnectionConfiguration) -> Bool,
-        createSession: @escaping @MainActor (ConnectionConfiguration) -> WritableConnectionSession<ConnectionConfiguration, Value>
-    ) where Connected == WritableConnectedValue<Value> {
-        self.init(
-            configurationsEqual: configurationsAreEqual,
-            createSession: { createSession($0).connectionSession }
-        )
-    }
-}
-
-extension ConnectionDefinition where ConnectionConfiguration: Equatable {
-    public init<Value>(
-        createSession: @escaping @MainActor (ConnectionConfiguration) -> WritableConnectionSession<ConnectionConfiguration, Value>
-    ) where Connected == WritableConnectedValue<Value> {
-        self.init(
-            configurationsAreEqual: { $0 == $1 },
-            createSession: createSession
-        )
-    }
-}
-
-extension ConnectionDefinition where ConnectionConfiguration == Void {
-    public init<Value>(
-        createSession: @escaping @MainActor () -> WritableConnectionSession<Void, Value>
-    ) where Connected == WritableConnectedValue<Value> {
-        self.init(
-            configurationsAreEqual: { _, _ in true },
-            createSession: { _ in createSession() }
-        )
     }
 
     public init<Value>(
@@ -224,7 +172,7 @@ extension ConnectionDefinition where ConnectionConfiguration == Void {
         setValue: @escaping @MainActor (Value) -> Void
     ) where Connected == WritableConnectedValue<Value> {
         self.init {
-            WritableConnectionSession(
+            Session(
                 currentValue: currentValue,
                 updates: updates,
                 setValue: setValue

@@ -16,7 +16,7 @@ import SwiftUI
 
         private var configuration: Configuration?
 
-        private var session: ConnectionSession<Configuration, Value.WrappedValue>?
+        private var session: ConnectionDefinition<Configuration, Value>.Session?
 
         private var subscription: AnyCancellable?
 

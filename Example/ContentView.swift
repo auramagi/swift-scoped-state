@@ -288,7 +288,7 @@ struct ProductDetailSnapshot: Equatable {
             productDetail: .init { configuration in
                 let container = ProductDetailContainer(appContainer: self, configuration: configuration)
                 let scope = container.scope
-                return ConnectionSession(
+                return .init(
                     currentValue: { scope },
                     updates: Empty<ProductScope, Never>(completeImmediately: false),
                     updateConfiguration: { container.update(configuration: $0) }
