@@ -44,6 +44,8 @@ public protocol ConnectionSource: SendableMetatype {
     @MainActor func makeSession(input: Input) -> ConnectionSession<Input, Value>
 }
 
+private protocol RootWritableConnectionSource: ConnectionSource {}
+
 /// A read-only connection which needs no external input.
 @MainActor public struct Connection<Value>: ConnectionSource {
     public typealias Input = NoConnectionInput
@@ -109,6 +111,8 @@ public protocol ConnectionSource: SendableMetatype {
     }
 }
 
+extension WritableConnection: RootWritableConnectionSource {}
+
 /// An input-bearing connection recipe. The session it creates owns the resulting
 /// state until the SwiftUI location holding the session disappears.
 public struct ConnectionFactory<Input: Equatable, Value>: ConnectionSource {
@@ -158,11 +162,6 @@ public struct ConnectionFactory<Input: Equatable, Value>: ConnectionSource {
 @MainActor private final class ConnectionHost<Source: ConnectionSource> {
     let storage = ScopedStateStorage<Source.Value>()
 
-    var replaceableValue: Source.Value {
-        get { storage.requiredValue }
-        set { replace(with: newValue) }
-    }
-
     private var sourceIdentity: ObjectIdentifier?
 
     private var input: Source.Input?
@@ -208,18 +207,6 @@ public struct ConnectionFactory<Input: Equatable, Value>: ConnectionSource {
         storage.receive(session.currentValue())
     }
 
-    private func replace(with value: Source.Value) {
-        guard let session else {
-            preconditionFailure("Scoped state was written before DynamicProperty.update()")
-        }
-
-        guard let setValue = session.setValue else {
-            preconditionFailure("A read-only scoped state value cannot be replaced")
-        }
-
-        setValue(value)
-    }
-
     subscript<Member>(member keyPath: ReferenceWritableKeyPath<Source.Value, Member>) -> Member {
         get {
             storage.requiredValue[keyPath: keyPath]
@@ -227,6 +214,25 @@ public struct ConnectionFactory<Input: Equatable, Value>: ConnectionSource {
         set {
             storage.requiredValue[keyPath: keyPath] = newValue
         }
+    }
+}
+
+extension ConnectionHost where Source: RootWritableConnectionSource {
+    var replaceableValue: Source.Value {
+        get { storage.requiredValue }
+        set { replace(with: newValue) }
+    }
+
+    private func replace(with value: Source.Value) {
+        guard let session else {
+            preconditionFailure("Scoped state was written before DynamicProperty.update()")
+        }
+
+        guard let setValue = session.setValue else {
+            preconditionFailure("A writable connection session must provide a setter")
+        }
+
+        setValue(value)
     }
 }
 
