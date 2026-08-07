@@ -378,19 +378,19 @@ struct ProductDetailSnapshot: Equatable {
 }
 
 @MainActor struct ProductScope {
-    let orderState: WritableConnection<OrderState>
+    let orderState: WritableConnection<NoConnectionInput, OrderState>
 
     let snapshot: Connection<NoConnectionInput, ProductDetailSnapshot>
 
     let isAvailable: Connection<NoConnectionInput, Bool>
 
-    let isFavorite: WritableConnection<Bool>
+    let isFavorite: WritableConnection<NoConnectionInput, Bool>
 
     let options: Connection<NoConnectionInput, ProductOptions>
 
     let optionControls: Connection<NoConnectionInput, ProductOptionControls>
 
-    let replaceableOptions: WritableConnection<ProductOptions>
+    let replaceableOptions: WritableConnection<NoConnectionInput, ProductOptions>
 }
 
 @MainActor final class ProductDetailContainer {

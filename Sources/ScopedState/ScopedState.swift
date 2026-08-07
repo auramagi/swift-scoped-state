@@ -24,20 +24,65 @@ public enum NoConnectionInput: Equatable {
 
     let updates: any Publisher<Value, Never>
 
-    private(set) var setValue: (@MainActor (Value) -> Void)? = nil
+    let setValue: (@MainActor (Value) -> Void)?
 
-    private(set) var updateInput: @MainActor (Input) -> Void = { _ in }
+    let updateInput: @MainActor (Input) -> Void
 
     public init(
         currentValue: @escaping @MainActor () -> Value,
         updates: any Publisher<Value, Never>,
-        setValue: (@MainActor (Value) -> Void)? = nil,
+        updateInput: @escaping @MainActor (Input) -> Void = { _ in }
+    ) {
+        self.currentValue = currentValue
+        self.updates = updates
+        self.setValue = nil
+        self.updateInput = updateInput
+    }
+
+    init(
+        currentValue: @escaping @MainActor () -> Value,
+        updates: any Publisher<Value, Never>,
+        setValue: @escaping @MainActor (Value) -> Void,
+        updateInput: @escaping @MainActor (Input) -> Void
+    ) {
+        self.currentValue = currentValue
+        self.updates = updates
+        self.setValue = setValue
+        self.updateInput = updateInput
+    }
+}
+
+/// A live writable connection created for one SwiftUI location.
+/// Its setter is required, so writable connections cannot be constructed
+/// without root replacement support.
+@MainActor public struct WritableConnectionSession<Input: Equatable, Value> {
+    let currentValue: @MainActor () -> Value
+
+    let updates: any Publisher<Value, Never>
+
+    let setValue: @MainActor (Value) -> Void
+
+    let updateInput: @MainActor (Input) -> Void
+
+    public init(
+        currentValue: @escaping @MainActor () -> Value,
+        updates: any Publisher<Value, Never>,
+        setValue: @escaping @MainActor (Value) -> Void,
         updateInput: @escaping @MainActor (Input) -> Void = { _ in }
     ) {
         self.currentValue = currentValue
         self.updates = updates
         self.setValue = setValue
         self.updateInput = updateInput
+    }
+
+    var connectionSession: ConnectionSession<Input, Value> {
+        ConnectionSession(
+            currentValue: currentValue,
+            updates: updates,
+            setValue: setValue,
+            updateInput: updateInput
+        )
     }
 }
 
@@ -51,7 +96,7 @@ public protocol ConnectionSource<Input>: SendableMetatype {
     @MainActor func makeSession(input: Input) -> ConnectionSession<Input, Value>
 }
 
-private protocol RootWritableConnectionSource: ConnectionSource<NoConnectionInput> {}
+private protocol RootWritableConnectionSource: ConnectionSource {}
 
 /// A read-only connection whose session is created for typed input.
 @MainActor public struct Connection<Input: Equatable, Value>: ConnectionSource {
@@ -88,38 +133,40 @@ extension Connection where Input == NoConnectionInput {
     }
 }
 
-/// A replaceable connection which needs no external input.
-@MainActor public struct WritableConnection<Value>: ConnectionSource {
-    public typealias Input = NoConnectionInput
-
-    let currentValue: @MainActor () -> Value
-
-    let updates: any Publisher<Value, Never>
-
-    let setValue: @MainActor (Value) -> Void
+/// A writable connection whose session is created for typed input.
+@MainActor public struct WritableConnection<Input: Equatable, Value>: ConnectionSource {
+    let createSession: @MainActor (Input) -> WritableConnectionSession<Input, Value>
 
     let identityToken = IdentityToken()
 
     public init(
-        currentValue: @escaping @MainActor () -> Value,
-        updates: any Publisher<Value, Never>,
-        setValue: @escaping @MainActor (Value) -> Void
+        createSession: @escaping @MainActor (Input) -> WritableConnectionSession<Input, Value>
     ) {
-        self.currentValue = currentValue
-        self.updates = updates
-        self.setValue = setValue
+        self.createSession = createSession
     }
 
     public var identity: ObjectIdentifier {
         ObjectIdentifier(identityToken)
     }
 
-    @MainActor public func makeSession(input: NoConnectionInput) -> ConnectionSession<NoConnectionInput, Value> {
-        ConnectionSession(
-            currentValue: currentValue,
-            updates: updates,
-            setValue: setValue
-        )
+    @MainActor public func makeSession(input: Input) -> ConnectionSession<Input, Value> {
+        createSession(input).connectionSession
+    }
+}
+
+extension WritableConnection where Input == NoConnectionInput {
+    public init(
+        currentValue: @escaping @MainActor () -> Value,
+        updates: any Publisher<Value, Never>,
+        setValue: @escaping @MainActor (Value) -> Void
+    ) {
+        self.init { _ in
+            WritableConnectionSession(
+                currentValue: currentValue,
+                updates: updates,
+                setValue: setValue
+            )
+        }
     }
 }
 
@@ -263,12 +310,12 @@ public struct ReadOnlyConnectionKey<Scope, Value>: ConnectionKey {
 }
 
 public struct WritableConnectionKey<Scope, Value>: ConnectionKey {
-    public typealias Source = WritableConnection<Value>
+    public typealias Source = WritableConnection<NoConnectionInput, Value>
 
-    public let keyPath: KeyPath<Scope, WritableConnection<Value>>
+    public let keyPath: KeyPath<Scope, WritableConnection<NoConnectionInput, Value>>
 
     @MainActor public func projection(
-        for location: ScopedStateLocation<WritableConnection<Value>>
+        for location: ScopedStateLocation<WritableConnection<NoConnectionInput, Value>>
     ) -> Binding<Value> {
         location.host.replaceableValue
     }
@@ -299,7 +346,7 @@ public struct WritableConnectionKey<Scope, Value>: ConnectionKey {
     }
 
     public init<Scope, Value>(
-        _ keyPath: KeyPath<Scope, WritableConnection<Value>>
+        _ keyPath: KeyPath<Scope, WritableConnection<NoConnectionInput, Value>>
     ) where Key == WritableConnectionKey<Scope, Value> {
         self.key = WritableConnectionKey(keyPath: keyPath)
         self._scope = Environment(ScopedStateStorage<Scope>.self)
