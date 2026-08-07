@@ -23,6 +23,15 @@ import SwiftUI
 }
 
 extension View {
+    /// Connects a scope without input at this SwiftUI location. The live session
+    /// retains any state or container created by the connection until the location
+    /// disappears.
+    @MainActor public func scope<ParentScope, Connected: ConnectedValue>(
+        _ connection: KeyPath<ParentScope, ConnectionDefinition<Void, Connected>>
+    ) -> some View {
+        scope(connection, input: ())
+    }
+
     /// Connects an input-bearing scope at this SwiftUI location. The live session
     /// retains any state or container created by the connection until the location
     /// disappears.
