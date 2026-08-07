@@ -273,7 +273,7 @@ struct ProductDetailSnapshot: Equatable {
 }
 
 @MainActor struct AppDiagnosticsScope {
-    let containerID: Connection<NoConnectionInput, UUID>
+    let containerID: Connection<Void, UUID>
 }
 
 @MainActor final class AppContainer {
@@ -378,19 +378,19 @@ struct ProductDetailSnapshot: Equatable {
 }
 
 @MainActor struct ProductScope {
-    let orderState: WritableConnection<NoConnectionInput, OrderState>
+    let orderState: WritableConnection<Void, OrderState>
 
-    let snapshot: Connection<NoConnectionInput, ProductDetailSnapshot>
+    let snapshot: Connection<Void, ProductDetailSnapshot>
 
-    let isAvailable: Connection<NoConnectionInput, Bool>
+    let isAvailable: Connection<Void, Bool>
 
-    let isFavorite: WritableConnection<NoConnectionInput, Bool>
+    let isFavorite: WritableConnection<Void, Bool>
 
-    let options: Connection<NoConnectionInput, ProductOptions>
+    let options: Connection<Void, ProductOptions>
 
-    let optionControls: Connection<NoConnectionInput, ProductOptionControls>
+    let optionControls: Connection<Void, ProductOptionControls>
 
-    let replaceableOptions: WritableConnection<NoConnectionInput, ProductOptions>
+    let replaceableOptions: WritableConnection<Void, ProductOptions>
 }
 
 @MainActor final class ProductDetailContainer {

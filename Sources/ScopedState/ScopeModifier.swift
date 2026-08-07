@@ -7,7 +7,7 @@
 
 import SwiftUI
 
-@MainActor private struct ScopeModifier<ParentScope, Input: Equatable, Scope>: ViewModifier {
+@MainActor private struct ScopeModifier<ParentScope, Scope, Input>: ViewModifier {
     @ScopedState<ParentScope, Connection<Input, Scope>, ScopedStateProjection<Input, Scope>> private var scope: Scope
 
     init(
@@ -26,7 +26,7 @@ extension View {
     /// Connects an input-bearing scope at this SwiftUI location. The live session
     /// retains any state or container created by the connection until the location
     /// disappears.
-    @MainActor public func scope<ParentScope, Scope, Input: Equatable>(
+    @MainActor public func scope<ParentScope, Scope, Input>(
         _ connection: KeyPath<ParentScope, Connection<Input, Scope>>,
         input: Input
     ) -> some View {

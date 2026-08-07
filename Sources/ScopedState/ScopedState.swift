@@ -13,13 +13,9 @@ import SwiftUI
 
 final class IdentityToken {}
 
-public enum NoConnectionInput: Equatable {
-    case value
-}
-
 /// A live connection created for one SwiftUI location.
 /// Its closures retain any implementation object needed to keep the value alive.
-@MainActor public struct ConnectionSession<Input: Equatable, Value> {
+@MainActor public struct ConnectionSession<Input, Value> {
     let currentValue: @MainActor () -> Value
 
     let updates: any Publisher<Value, Never>
@@ -55,7 +51,7 @@ public enum NoConnectionInput: Equatable {
 /// A live writable connection created for one SwiftUI location.
 /// Its setter is required, so writable connections cannot be constructed
 /// without root replacement support.
-@MainActor public struct WritableConnectionSession<Input: Equatable, Value> {
+@MainActor public struct WritableConnectionSession<Input, Value> {
     let currentValue: @MainActor () -> Value
 
     let updates: any Publisher<Value, Never>
@@ -87,11 +83,13 @@ public enum NoConnectionInput: Equatable {
 }
 
 public protocol ConnectionSource<Input>: SendableMetatype {
-    associatedtype Input: Equatable
+    associatedtype Input
 
     associatedtype Value
 
     @MainActor var identity: ObjectIdentifier { get }
+
+    @MainActor func inputsAreEqual(_ lhs: Input, _ rhs: Input) -> Bool
 
     @MainActor func makeSession(input: Input) -> ConnectionSession<Input, Value>
 }
@@ -99,14 +97,18 @@ public protocol ConnectionSource<Input>: SendableMetatype {
 private protocol RootWritableConnectionSource: ConnectionSource {}
 
 /// A read-only connection whose session is created for typed input.
-@MainActor public struct Connection<Input: Equatable, Value>: ConnectionSource {
+@MainActor public struct Connection<Input, Value>: ConnectionSource {
+    let inputsEqual: @MainActor (Input, Input) -> Bool
+
     let createSession: @MainActor (Input) -> ConnectionSession<Input, Value>
 
     let identityToken = IdentityToken()
 
     public init(
+        inputsAreEqual: @escaping @MainActor (Input, Input) -> Bool,
         createSession: @escaping @MainActor (Input) -> ConnectionSession<Input, Value>
     ) {
+        self.inputsEqual = inputsAreEqual
         self.createSession = createSession
     }
 
@@ -114,17 +116,41 @@ private protocol RootWritableConnectionSource: ConnectionSource {}
         ObjectIdentifier(identityToken)
     }
 
+    @MainActor public func inputsAreEqual(_ lhs: Input, _ rhs: Input) -> Bool {
+        inputsEqual(lhs, rhs)
+    }
+
     @MainActor public func makeSession(input: Input) -> ConnectionSession<Input, Value> {
         createSession(input)
     }
 }
 
-extension Connection where Input == NoConnectionInput {
+extension Connection where Input: Equatable {
+    public init(
+        createSession: @escaping @MainActor (Input) -> ConnectionSession<Input, Value>
+    ) {
+        self.init(
+            inputsAreEqual: { $0 == $1 },
+            createSession: createSession
+        )
+    }
+}
+
+extension Connection where Input == Void {
+    public init(
+        createSession: @escaping @MainActor () -> ConnectionSession<Void, Value>
+    ) {
+        self.init(
+            inputsAreEqual: { _, _ in true },
+            createSession: { _ in createSession() }
+        )
+    }
+
     public init(
         currentValue: @escaping @MainActor () -> Value,
         updates: any Publisher<Value, Never>
     ) {
-        self.init { _ in
+        self.init {
             ConnectionSession(
                 currentValue: currentValue,
                 updates: updates
@@ -134,14 +160,18 @@ extension Connection where Input == NoConnectionInput {
 }
 
 /// A writable connection whose session is created for typed input.
-@MainActor public struct WritableConnection<Input: Equatable, Value>: ConnectionSource {
+@MainActor public struct WritableConnection<Input, Value>: ConnectionSource {
+    let inputsEqual: @MainActor (Input, Input) -> Bool
+
     let createSession: @MainActor (Input) -> WritableConnectionSession<Input, Value>
 
     let identityToken = IdentityToken()
 
     public init(
+        inputsAreEqual: @escaping @MainActor (Input, Input) -> Bool,
         createSession: @escaping @MainActor (Input) -> WritableConnectionSession<Input, Value>
     ) {
+        self.inputsEqual = inputsAreEqual
         self.createSession = createSession
     }
 
@@ -149,18 +179,42 @@ extension Connection where Input == NoConnectionInput {
         ObjectIdentifier(identityToken)
     }
 
+    @MainActor public func inputsAreEqual(_ lhs: Input, _ rhs: Input) -> Bool {
+        inputsEqual(lhs, rhs)
+    }
+
     @MainActor public func makeSession(input: Input) -> ConnectionSession<Input, Value> {
         createSession(input).connectionSession
     }
 }
 
-extension WritableConnection where Input == NoConnectionInput {
+extension WritableConnection where Input: Equatable {
+    public init(
+        createSession: @escaping @MainActor (Input) -> WritableConnectionSession<Input, Value>
+    ) {
+        self.init(
+            inputsAreEqual: { $0 == $1 },
+            createSession: createSession
+        )
+    }
+}
+
+extension WritableConnection where Input == Void {
+    public init(
+        createSession: @escaping @MainActor () -> WritableConnectionSession<Void, Value>
+    ) {
+        self.init(
+            inputsAreEqual: { _, _ in true },
+            createSession: { _ in createSession() }
+        )
+    }
+
     public init(
         currentValue: @escaping @MainActor () -> Value,
         updates: any Publisher<Value, Never>,
         setValue: @escaping @MainActor (Value) -> Void
     ) {
-        self.init { _ in
+        self.init {
             WritableConnectionSession(
                 currentValue: currentValue,
                 updates: updates,
@@ -209,7 +263,7 @@ extension WritableConnection: RootWritableConnectionSource {}
         let sourceIdentity = source.identity
 
         guard self.sourceIdentity != sourceIdentity else {
-            updateInputIfNeeded(input)
+            updateInputIfNeeded(input, source: source)
             return
         }
 
@@ -232,8 +286,12 @@ extension WritableConnection: RootWritableConnectionSource {}
             }
     }
 
-    private func updateInputIfNeeded(_ input: Source.Input) {
-        guard self.input != input, let session else {
+    private func updateInputIfNeeded(_ input: Source.Input, source: Source) {
+        guard
+            let previousInput = self.input,
+            !source.inputsAreEqual(previousInput, input),
+            let session
+        else {
             return
         }
 
@@ -284,7 +342,7 @@ extension ConnectionHost where Source: RootWritableConnectionSource {
     }
 }
 
-@MainActor @dynamicMemberLookup public struct ScopedStateProjection<Input: Equatable, Value> {
+@MainActor @dynamicMemberLookup public struct ScopedStateProjection<Input, Value> {
     fileprivate let location: ScopedStateLocation<Connection<Input, Value>>
 
     public subscript<Member>(dynamicMember keyPath: ReferenceWritableKeyPath<Value, Member>) -> Binding<Member> {
@@ -309,15 +367,15 @@ extension ConnectionHost where Source: RootWritableConnectionSource {
     private let makeProjection: @MainActor (Binding<ConnectionHost<Source>>) -> Projection
 
     public init<Value>(
-        _ keyPath: KeyPath<Scope, Connection<NoConnectionInput, Value>>
+        _ keyPath: KeyPath<Scope, Connection<Void, Value>>
     ) where
-        Source == Connection<NoConnectionInput, Value>,
-        Projection == ScopedStateProjection<NoConnectionInput, Value>
+        Source == Connection<Void, Value>,
+        Projection == ScopedStateProjection<Void, Value>
     {
-        self.init(keyPath, input: .value)
+        self.init(keyPath, input: ())
     }
 
-    public init<Input: Equatable, Value>(
+    public init<Input, Value>(
         _ keyPath: KeyPath<Scope, Connection<Input, Value>>,
         input: Input
     ) where
@@ -332,12 +390,12 @@ extension ConnectionHost where Source: RootWritableConnectionSource {
     }
 
     public init<Value>(
-        _ keyPath: KeyPath<Scope, WritableConnection<NoConnectionInput, Value>>
-    ) where Source == WritableConnection<NoConnectionInput, Value>, Projection == Binding<Value> {
-        self.init(keyPath, input: .value)
+        _ keyPath: KeyPath<Scope, WritableConnection<Void, Value>>
+    ) where Source == WritableConnection<Void, Value>, Projection == Binding<Value> {
+        self.init(keyPath, input: ())
     }
 
-    public init<Input: Equatable, Value>(
+    public init<Input, Value>(
         _ keyPath: KeyPath<Scope, WritableConnection<Input, Value>>,
         input: Input
     ) where Source == WritableConnection<Input, Value>, Projection == Binding<Value> {
