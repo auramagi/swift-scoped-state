@@ -8,7 +8,7 @@
 import SwiftUI
 
 @MainActor private struct ScopeModifier<ParentScope, Input: Equatable, Scope>: ViewModifier {
-    @ScopedState<ReadOnlyConnectionKey<ParentScope, Input, Scope>> private var scope: Scope
+    @ScopedState<ParentScope, Connection<Input, Scope>, ScopedStateProjection<Input, Scope>> private var scope: Scope
 
     init(
         connection: KeyPath<ParentScope, Connection<Input, Scope>>,

@@ -271,53 +271,16 @@ extension ConnectionHost where Source: RootWritableConnectionSource {
     }
 }
 
-// MARK: - Scoped state keys and projections
+// MARK: - Scoped state projections
 
-public protocol ConnectionKey {
-    associatedtype Scope
-
-    associatedtype Source: ConnectionSource
-
-    associatedtype Projection
-
-    var keyPath: KeyPath<Scope, Source> { get }
-
-    @MainActor func projection(for location: ScopedStateLocation<Source>) -> Projection
-}
-
-/// The SwiftUI-owned location from which a connection key derives its
-/// projected value.
-@MainActor public struct ScopedStateLocation<Source: ConnectionSource> {
+/// The SwiftUI-owned location from which `ScopedState` derives its projection.
+@MainActor struct ScopedStateLocation<Source: ConnectionSource> {
     fileprivate let host: Binding<ConnectionHost<Source>>
 
     fileprivate func memberBinding<Member>(
         _ keyPath: ReferenceWritableKeyPath<Source.Value, Member>
     ) -> Binding<Member> {
         host[dynamicMember: \ConnectionHost<Source>.[member: keyPath]]
-    }
-}
-
-public struct ReadOnlyConnectionKey<Scope, Input: Equatable, Value>: ConnectionKey {
-    public typealias Source = Connection<Input, Value>
-
-    public let keyPath: KeyPath<Scope, Connection<Input, Value>>
-
-    @MainActor public func projection(
-        for location: ScopedStateLocation<Connection<Input, Value>>
-    ) -> ScopedStateProjection<Input, Value> {
-        ScopedStateProjection(location: location)
-    }
-}
-
-public struct WritableConnectionKey<Scope, Input: Equatable, Value>: ConnectionKey {
-    public typealias Source = WritableConnection<Input, Value>
-
-    public let keyPath: KeyPath<Scope, WritableConnection<Input, Value>>
-
-    @MainActor public func projection(
-        for location: ScopedStateLocation<WritableConnection<Input, Value>>
-    ) -> Binding<Value> {
-        location.host.replaceableValue
     }
 }
 
@@ -331,59 +294,76 @@ public struct WritableConnectionKey<Scope, Input: Equatable, Value>: ConnectionK
 
 // MARK: - Scoped state dynamic property
 
-@MainActor @propertyWrapper public struct ScopedState<Key: ConnectionKey>: @MainActor DynamicProperty {
-    @Environment(ScopedStateStorage<Key.Scope>.self) private var scope
+@MainActor @propertyWrapper public struct ScopedState<Scope, Source: ConnectionSource, Projection>: @MainActor DynamicProperty {
+    @Environment(ScopedStateStorage<Scope>.self) private var scope
 
-    @State private var host = ConnectionHost<Key.Source>()
+    @State private var host = ConnectionHost<Source>()
 
-    private let key: Key
+    private let keyPath: KeyPath<Scope, Source>
 
-    private let input: Key.Source.Input
+    private let input: Source.Input
 
-    public init<Scope, Value>(
+    // Swift only synthesizes `$property` when `projectedValue` is available on
+    // the primary wrapper declaration. Each initializer fixes its projection
+    // without making connection sources depend on SwiftUI projection semantics.
+    private let makeProjection: @MainActor (Binding<ConnectionHost<Source>>) -> Projection
+
+    public init<Value>(
         _ keyPath: KeyPath<Scope, Connection<NoConnectionInput, Value>>
-    ) where Key == ReadOnlyConnectionKey<Scope, NoConnectionInput, Value> {
+    ) where
+        Source == Connection<NoConnectionInput, Value>,
+        Projection == ScopedStateProjection<NoConnectionInput, Value>
+    {
         self.init(keyPath, input: .value)
     }
 
-    public init<Scope, Input: Equatable, Value>(
+    public init<Input: Equatable, Value>(
         _ keyPath: KeyPath<Scope, Connection<Input, Value>>,
         input: Input
-    ) where Key == ReadOnlyConnectionKey<Scope, Input, Value> {
-        self.key = ReadOnlyConnectionKey(keyPath: keyPath)
+    ) where
+        Source == Connection<Input, Value>,
+        Projection == ScopedStateProjection<Input, Value>
+    {
+        self.keyPath = keyPath
         self.input = input
+        self.makeProjection = { host in
+            ScopedStateProjection(location: ScopedStateLocation(host: host))
+        }
     }
 
-    public init<Scope, Value>(
+    public init<Value>(
         _ keyPath: KeyPath<Scope, WritableConnection<NoConnectionInput, Value>>
-    ) where Key == WritableConnectionKey<Scope, NoConnectionInput, Value> {
+    ) where Source == WritableConnection<NoConnectionInput, Value>, Projection == Binding<Value> {
         self.init(keyPath, input: .value)
     }
 
-    public init<Scope, Input: Equatable, Value>(
+    public init<Input: Equatable, Value>(
         _ keyPath: KeyPath<Scope, WritableConnection<Input, Value>>,
         input: Input
-    ) where Key == WritableConnectionKey<Scope, Input, Value> {
-        self.key = WritableConnectionKey(keyPath: keyPath)
+    ) where Source == WritableConnection<Input, Value>, Projection == Binding<Value> {
+        self.keyPath = keyPath
         self.input = input
+        self.makeProjection = { host in
+            host.replaceableValue
+        }
     }
 
     public func update() {
         host.connectIfNeeded(
-            to: scope.requiredValue[keyPath: key.keyPath],
+            to: scope.requiredValue[keyPath: keyPath],
             input: input
         )
     }
 
-    var storage: ScopedStateStorage<Key.Source.Value> {
+    var storage: ScopedStateStorage<Source.Value> {
         host.storage
     }
 
-    public var wrappedValue: Key.Source.Value {
+    public var wrappedValue: Source.Value {
         host.storage.requiredValue
     }
 
-    public var projectedValue: Key.Projection {
-        key.projection(for: ScopedStateLocation(host: $host))
+    public var projectedValue: Projection {
+        makeProjection($host)
     }
 }
