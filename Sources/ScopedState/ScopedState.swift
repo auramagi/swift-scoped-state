@@ -82,23 +82,39 @@ final class IdentityToken {}
     }
 }
 
-public enum ConnectionWriteAccess {}
+public protocol ConnectedValue {
+    associatedtype WrappedValue
+
+    associatedtype Projection
+}
+
+public enum ReadOnlyConnectedValue<Value>: ConnectedValue {
+    public typealias WrappedValue = Value
+
+    public typealias Projection = ScopedStateProjection<Value>
+}
+
+public enum WritableConnectedValue<Value>: ConnectedValue {
+    public typealias WrappedValue = Value
+
+    public typealias Projection = Binding<Value>
+}
 
 /// The generic implementation underlying the public `Connection<Value>` family.
-@MainActor public struct ConnectionDefinition<ConnectionInput, Value, Access> {
-    public typealias Input<NewInput> = ConnectionDefinition<NewInput, Value, Access>
+@MainActor public struct ConnectionDefinition<ConnectionInput, Connected: ConnectedValue> {
+    public typealias Input<NewInput> = ConnectionDefinition<NewInput, Connected>
 
-    public typealias Writable = ConnectionDefinition<ConnectionInput, Value, ConnectionWriteAccess>
+    public typealias Writable = ConnectionDefinition<ConnectionInput, WritableConnectedValue<Connected.WrappedValue>>
 
     let inputsEqual: @MainActor (ConnectionInput, ConnectionInput) -> Bool
 
-    let createSession: @MainActor (ConnectionInput) -> ConnectionSession<ConnectionInput, Value>
+    let createSession: @MainActor (ConnectionInput) -> ConnectionSession<ConnectionInput, Connected.WrappedValue>
 
     let identityToken = IdentityToken()
 
     private init(
         inputsEqual: @escaping @MainActor (ConnectionInput, ConnectionInput) -> Bool,
-        createSession: @escaping @MainActor (ConnectionInput) -> ConnectionSession<ConnectionInput, Value>
+        createSession: @escaping @MainActor (ConnectionInput) -> ConnectionSession<ConnectionInput, Connected.WrappedValue>
     ) {
         self.inputsEqual = inputsEqual
         self.createSession = createSession
@@ -112,18 +128,18 @@ public enum ConnectionWriteAccess {}
         inputsEqual(lhs, rhs)
     }
 
-    @MainActor public func makeSession(input: ConnectionInput) -> ConnectionSession<ConnectionInput, Value> {
+    @MainActor public func makeSession(input: ConnectionInput) -> ConnectionSession<ConnectionInput, Connected.WrappedValue> {
         createSession(input)
     }
 }
 
-public typealias Connection<Value> = ConnectionDefinition<Void, Value, Void>
+public typealias Connection<Value> = ConnectionDefinition<Void, ReadOnlyConnectedValue<Value>>
 
-extension ConnectionDefinition where Access == Void {
-    public init(
+extension ConnectionDefinition {
+    public init<Value>(
         inputsAreEqual: @escaping @MainActor (ConnectionInput, ConnectionInput) -> Bool,
         createSession: @escaping @MainActor (ConnectionInput) -> ConnectionSession<ConnectionInput, Value>
-    ) {
+    ) where Connected == ReadOnlyConnectedValue<Value> {
         self.init(
             inputsEqual: inputsAreEqual,
             createSession: createSession
@@ -131,10 +147,10 @@ extension ConnectionDefinition where Access == Void {
     }
 }
 
-extension ConnectionDefinition where ConnectionInput: Equatable, Access == Void {
-    public init(
+extension ConnectionDefinition where ConnectionInput: Equatable {
+    public init<Value>(
         createSession: @escaping @MainActor (ConnectionInput) -> ConnectionSession<ConnectionInput, Value>
-    ) {
+    ) where Connected == ReadOnlyConnectedValue<Value> {
         self.init(
             inputsAreEqual: { $0 == $1 },
             createSession: createSession
@@ -142,20 +158,20 @@ extension ConnectionDefinition where ConnectionInput: Equatable, Access == Void 
     }
 }
 
-extension ConnectionDefinition where ConnectionInput == Void, Access == Void {
-    public init(
+extension ConnectionDefinition where ConnectionInput == Void {
+    public init<Value>(
         createSession: @escaping @MainActor () -> ConnectionSession<Void, Value>
-    ) {
+    ) where Connected == ReadOnlyConnectedValue<Value> {
         self.init(
             inputsAreEqual: { _, _ in true },
             createSession: { _ in createSession() }
         )
     }
 
-    public init(
+    public init<Value>(
         currentValue: @escaping @MainActor () -> Value,
         updates: any Publisher<Value, Never>
-    ) {
+    ) where Connected == ReadOnlyConnectedValue<Value> {
         self.init {
             ConnectionSession(
                 currentValue: currentValue,
@@ -165,11 +181,11 @@ extension ConnectionDefinition where ConnectionInput == Void, Access == Void {
     }
 }
 
-extension ConnectionDefinition where Access == ConnectionWriteAccess {
-    public init(
+extension ConnectionDefinition {
+    public init<Value>(
         inputsAreEqual: @escaping @MainActor (ConnectionInput, ConnectionInput) -> Bool,
         createSession: @escaping @MainActor (ConnectionInput) -> WritableConnectionSession<ConnectionInput, Value>
-    ) {
+    ) where Connected == WritableConnectedValue<Value> {
         self.init(
             inputsEqual: inputsAreEqual,
             createSession: { createSession($0).connectionSession }
@@ -177,10 +193,10 @@ extension ConnectionDefinition where Access == ConnectionWriteAccess {
     }
 }
 
-extension ConnectionDefinition where ConnectionInput: Equatable, Access == ConnectionWriteAccess {
-    public init(
+extension ConnectionDefinition where ConnectionInput: Equatable {
+    public init<Value>(
         createSession: @escaping @MainActor (ConnectionInput) -> WritableConnectionSession<ConnectionInput, Value>
-    ) {
+    ) where Connected == WritableConnectedValue<Value> {
         self.init(
             inputsAreEqual: { $0 == $1 },
             createSession: createSession
@@ -188,21 +204,21 @@ extension ConnectionDefinition where ConnectionInput: Equatable, Access == Conne
     }
 }
 
-extension ConnectionDefinition where ConnectionInput == Void, Access == ConnectionWriteAccess {
-    public init(
+extension ConnectionDefinition where ConnectionInput == Void {
+    public init<Value>(
         createSession: @escaping @MainActor () -> WritableConnectionSession<Void, Value>
-    ) {
+    ) where Connected == WritableConnectedValue<Value> {
         self.init(
             inputsAreEqual: { _, _ in true },
             createSession: { _ in createSession() }
         )
     }
 
-    public init(
+    public init<Value>(
         currentValue: @escaping @MainActor () -> Value,
         updates: any Publisher<Value, Never>,
         setValue: @escaping @MainActor (Value) -> Void
-    ) {
+    ) where Connected == WritableConnectedValue<Value> {
         self.init {
             WritableConnectionSession(
                 currentValue: currentValue,
@@ -235,7 +251,7 @@ extension ConnectionDefinition where ConnectionInput == Void, Access == Connecti
 
 /// The single, fully typed lifecycle owner used for ordinary state and scopes.
 /// Its source, input, session, and output types remain known after connection.
-@MainActor final class ConnectionHost<Input, Value, Access> {
+@MainActor final class ConnectionHost<Input, Value> {
     let storage = ScopedStateStorage<Value>()
 
     private var sourceIdentity: ObjectIdentifier?
@@ -246,10 +262,10 @@ extension ConnectionDefinition where ConnectionInput == Void, Access == Connecti
 
     private var subscription: AnyCancellable?
 
-    func connectIfNeeded(
-        to source: ConnectionDefinition<Input, Value, Access>,
+    func connectIfNeeded<Connected: ConnectedValue>(
+        to source: ConnectionDefinition<Input, Connected>,
         input: Input
-    ) {
+    ) where Connected.WrappedValue == Value {
         let sourceIdentity = source.identity
 
         guard self.sourceIdentity != sourceIdentity else {
@@ -276,10 +292,10 @@ extension ConnectionDefinition where ConnectionInput == Void, Access == Connecti
             }
     }
 
-    private func updateInputIfNeeded(
+    private func updateInputIfNeeded<Connected: ConnectedValue>(
         _ input: Input,
-        source: ConnectionDefinition<Input, Value, Access>
-    ) {
+        source: ConnectionDefinition<Input, Connected>
+    ) where Connected.WrappedValue == Value {
         guard
             let previousInput = self.input,
             !source.inputsAreEqual(previousInput, input),
@@ -303,7 +319,7 @@ extension ConnectionDefinition where ConnectionInput == Void, Access == Connecti
     }
 }
 
-extension ConnectionHost where Access == ConnectionWriteAccess {
+extension ConnectionHost {
     var replaceableValue: Value {
         get { storage.requiredValue }
         set { replace(with: newValue) }
@@ -324,19 +340,29 @@ extension ConnectionHost where Access == ConnectionWriteAccess {
 
 // MARK: - Scoped state projections
 
-/// The SwiftUI-owned location from which `ScopedState` derives its projection.
-@MainActor struct ScopedStateLocation<Input, Value, Access> {
-    fileprivate let host: Binding<ConnectionHost<Input, Value, Access>>
+@MainActor private protocol ScopedStateProjectionLocation<Value> {
+    associatedtype Value
 
-    fileprivate func memberBinding<Member>(
+    func memberBinding<Member>(_ keyPath: ReferenceWritableKeyPath<Value, Member>) -> Binding<Member>
+}
+
+/// The SwiftUI-owned location from which `ScopedState` derives its projection.
+@MainActor private struct ScopedStateLocation<Input, Value>: ScopedStateProjectionLocation {
+    fileprivate let host: Binding<ConnectionHost<Input, Value>>
+
+    func memberBinding<Member>(
         _ keyPath: ReferenceWritableKeyPath<Value, Member>
     ) -> Binding<Member> {
-        host[dynamicMember: \ConnectionHost<Input, Value, Access>.[member: keyPath]]
+        host[dynamicMember: \ConnectionHost<Input, Value>.[member: keyPath]]
     }
 }
 
-@MainActor @dynamicMemberLookup public struct ScopedStateProjection<Input, Value> {
-    fileprivate let location: ScopedStateLocation<Input, Value, Void>
+@MainActor @dynamicMemberLookup public struct ScopedStateProjection<Value> {
+    private let location: any ScopedStateProjectionLocation<Value>
+
+    fileprivate init<Location: ScopedStateProjectionLocation<Value>>(location: Location) {
+        self.location = location
+    }
 
     public subscript<Member>(dynamicMember keyPath: ReferenceWritableKeyPath<Value, Member>) -> Binding<Member> {
         location.memberBinding(keyPath)
@@ -345,36 +371,31 @@ extension ConnectionHost where Access == ConnectionWriteAccess {
 
 // MARK: - Scoped state dynamic property
 
-@MainActor @propertyWrapper public struct ScopedState<Scope, Input, Value, Access, Projection>: @MainActor DynamicProperty {
+@MainActor @propertyWrapper public struct ScopedState<Scope, Input, Connected: ConnectedValue>: @MainActor DynamicProperty {
     @Environment(ScopedStateStorage<Scope>.self) private var scope
 
-    @State private var host = ConnectionHost<Input, Value, Access>()
+    @State private var host = ConnectionHost<Input, Connected.WrappedValue>()
 
-    private let keyPath: KeyPath<Scope, ConnectionDefinition<Input, Value, Access>>
+    private let keyPath: KeyPath<Scope, ConnectionDefinition<Input, Connected>>
 
     private let input: Input
 
-    // Swift only synthesizes `$property` when `projectedValue` is available on
-    // the primary wrapper declaration. Each initializer fixes its projection
-    // without coupling connection definitions to SwiftUI projection semantics.
-    private let makeProjection: @MainActor (Binding<ConnectionHost<Input, Value, Access>>) -> Projection
+    private let makeProjection: @MainActor (Binding<ConnectionHost<Input, Connected.WrappedValue>>) -> Connected.Projection
 
-    public init(
+    public init<Value>(
         _ keyPath: KeyPath<Scope, Connection<Value>>
     ) where
         Input == Void,
-        Access == Void,
-        Projection == ScopedStateProjection<Void, Value>
+        Connected == ReadOnlyConnectedValue<Value>
     {
         self.init(keyPath, input: ())
     }
 
-    public init(
+    public init<Value>(
         _ keyPath: KeyPath<Scope, Connection<Value>.Input<Input>>,
         input: Input
     ) where
-        Access == Void,
-        Projection == ScopedStateProjection<Input, Value>
+        Connected == ReadOnlyConnectedValue<Value>
     {
         self.keyPath = keyPath
         self.input = input
@@ -383,20 +404,19 @@ extension ConnectionHost where Access == ConnectionWriteAccess {
         }
     }
 
-    public init(
+    public init<Value>(
         _ keyPath: KeyPath<Scope, Connection<Value>.Writable>
     ) where
         Input == Void,
-        Access == ConnectionWriteAccess,
-        Projection == Binding<Value>
+        Connected == WritableConnectedValue<Value>
     {
         self.init(keyPath, input: ())
     }
 
-    public init(
+    public init<Value>(
         _ keyPath: KeyPath<Scope, Connection<Value>.Input<Input>.Writable>,
         input: Input
-    ) where Access == ConnectionWriteAccess, Projection == Binding<Value> {
+    ) where Connected == WritableConnectedValue<Value> {
         self.keyPath = keyPath
         self.input = input
         self.makeProjection = { host in
@@ -411,15 +431,15 @@ extension ConnectionHost where Access == ConnectionWriteAccess {
         )
     }
 
-    var storage: ScopedStateStorage<Value> {
+    var storage: ScopedStateStorage<Connected.WrappedValue> {
         host.storage
     }
 
-    public var wrappedValue: Value {
+    public var wrappedValue: Connected.WrappedValue {
         host.storage.requiredValue
     }
 
-    public var projectedValue: Projection {
+    public var projectedValue: Connected.Projection {
         makeProjection($host)
     }
 }
