@@ -23,7 +23,7 @@ import SwiftUI
 }
 
 @MainActor @propertyWrapper private struct ContainerScopeProvider<Container: AnyObject, Scope>: @MainActor DynamicProperty {
-    @MainActor private final class Storage {
+    @MainActor private final class Coordinator {
         let scope = ScopedStateStorage<Scope>()
 
         var container: Container?
@@ -31,24 +31,24 @@ import SwiftUI
         var keyPath: KeyPath<Container, Scope>?
     }
 
-    @State private var storage = Storage()
+    @State private var coordinator = Coordinator()
 
     let container: Container
 
     let keyPath: KeyPath<Container, Scope>
 
     func update() {
-        guard storage.container !== container || storage.keyPath != keyPath else {
+        guard coordinator.container !== container || coordinator.keyPath != keyPath else {
             return
         }
 
-        storage.scope.value = container[keyPath: keyPath]
-        storage.container = container
-        storage.keyPath = keyPath
+        coordinator.scope.value = container[keyPath: keyPath]
+        coordinator.container = container
+        coordinator.keyPath = keyPath
     }
 
     var wrappedValue: ScopedStateStorage<Scope> {
-        storage.scope
+        coordinator.scope
     }
 }
 

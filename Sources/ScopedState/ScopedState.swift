@@ -283,7 +283,7 @@ extension ConnectionDefinition where ConnectionConfiguration == Void {
 // MARK: - Scoped state dynamic property
 
 @MainActor @propertyWrapper public struct ScopedState<Scope, Configuration, Value: ConnectedValue>: @MainActor DynamicProperty {
-    @MainActor private final class Storage {
+    @MainActor private final class Coordinator {
         var value = ScopedStateStorage<Value.WrappedValue>()
 
         var sourceIdentity: ObjectIdentifier?
@@ -324,22 +324,22 @@ extension ConnectionDefinition where ConnectionConfiguration == Void {
     @MainActor private struct ProjectionSource: ScopedStateProjectionSource {
         typealias WrappedValue = Value.WrappedValue
 
-        let storage: Binding<Storage>
+        let coordinator: Binding<Coordinator>
 
         var rootBinding: Binding<WrappedValue> {
-            storage.replaceableValue
+            coordinator.replaceableValue
         }
 
         func memberBinding<Member>(
             _ keyPath: ReferenceWritableKeyPath<WrappedValue, Member>
         ) -> Binding<Member> {
-            storage[dynamicMember: \Storage.[member: keyPath]]
+            coordinator[dynamicMember: \Coordinator.[member: keyPath]]
         }
     }
 
     @Environment(ScopedStateStorage<Scope>.self) private var scope
 
-    @State private var storage: Storage
+    @State private var coordinator: Coordinator
 
     private let keyPath: KeyPath<Scope, ConnectionDefinition<Configuration, Value>>
 
@@ -355,7 +355,7 @@ extension ConnectionDefinition where ConnectionConfiguration == Void {
         _ keyPath: KeyPath<Scope, ConnectionDefinition<Configuration, Value>>,
         configuration: Configuration
     ) {
-        self._storage = State(initialValue: Storage())
+        self._coordinator = State(initialValue: Coordinator())
         self.keyPath = keyPath
         self.configuration = configuration
     }
@@ -368,15 +368,15 @@ extension ConnectionDefinition where ConnectionConfiguration == Void {
     }
 
     var valueStorage: ScopedStateStorage<Value.WrappedValue> {
-        storage.value
+        coordinator.value
     }
 
     public var wrappedValue: Value.WrappedValue {
-        storage.value.requiredValue
+        coordinator.value.requiredValue
     }
 
     public var projectedValue: Value.Projection {
-        let projection = ScopedStateProjection(source: ProjectionSource(storage: $storage))
+        let projection = ScopedStateProjection(source: ProjectionSource(coordinator: $coordinator))
         return Value.transformProjection(projection)
     }
 
@@ -386,27 +386,27 @@ extension ConnectionDefinition where ConnectionConfiguration == Void {
     ) {
         let sourceIdentity = source.identity
 
-        guard storage.sourceIdentity != sourceIdentity else {
+        guard coordinator.sourceIdentity != sourceIdentity else {
             updateConfigurationIfNeeded(configuration, source: source)
             return
         }
 
         let session = source.makeSession(configuration: configuration)
-        storage.subscription?.cancel()
+        coordinator.subscription?.cancel()
 
-        storage.sourceIdentity = sourceIdentity
-        storage.configuration = configuration
-        storage.session = session
-        storage.value.value = session.currentValue()
+        coordinator.sourceIdentity = sourceIdentity
+        coordinator.configuration = configuration
+        coordinator.session = session
+        coordinator.value.value = session.currentValue()
 
-        storage.subscription = session.updates
+        coordinator.subscription = session.updates
             .eraseToAnyPublisher()
             .receive(on: DispatchQueue.main)
-            .sink { [weak storage] value in
-                guard storage?.sourceIdentity == sourceIdentity else {
+            .sink { [weak coordinator] value in
+                guard coordinator?.sourceIdentity == sourceIdentity else {
                     return
                 }
-                storage?.value.value = value
+                coordinator?.value.value = value
             }
     }
 
@@ -415,15 +415,15 @@ extension ConnectionDefinition where ConnectionConfiguration == Void {
         source: ConnectionDefinition<Configuration, Value>
     ) {
         guard
-            let previousConfiguration = storage.configuration,
+            let previousConfiguration = coordinator.configuration,
             !source.configurationsAreEqual(previousConfiguration, configuration),
-            let session = storage.session
+            let session = coordinator.session
         else {
             return
         }
 
-        storage.configuration = configuration
+        coordinator.configuration = configuration
         session.updateConfiguration(configuration)
-        storage.value.value = session.currentValue()
+        coordinator.value.value = session.currentValue()
     }
 }
