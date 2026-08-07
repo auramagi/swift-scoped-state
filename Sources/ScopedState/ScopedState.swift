@@ -209,18 +209,20 @@ public struct ConnectionFactory<Input: Equatable, Value>: ConnectionSource {
     }
 
     private func write(_ value: Source.Value) {
-        guard let setValue = session?.setValue else {
+        guard let session else {
             preconditionFailure("Scoped state was written before DynamicProperty.update()")
         }
 
-        setValue(value)
+        // A derived binding to a member of a read-only reference value writes
+        // the unchanged root reference back after mutating the member.
+        session.setValue?(value)
     }
 }
 
 // MARK: - Typed scope injection
 
 @MainActor @propertyWrapper private struct ContainerScopeProvider<Container: AnyObject, Scope>: @MainActor DynamicProperty {
-    @MainActor private struct Storage {
+    @MainActor private final class Storage {
         let scope = ScopedStateStorage<Scope>()
 
         var container: Container?
