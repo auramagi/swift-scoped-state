@@ -98,7 +98,7 @@ public enum ReadOnlyConnectedValue<WrappedValue>: ConnectedValue {
 
 public enum WritableConnectedValue<WrappedValue>: ConnectedValue {
     @MainActor public static func transformProjection(_ projection: ScopedStateProjection<WrappedValue>) -> Binding<WrappedValue> {
-        projection.rootBinding
+        projection.binding
     }
 }
 
@@ -254,29 +254,11 @@ extension ConnectionDefinition where ConnectionConfiguration == Void {
 
 // MARK: - Scoped state projections
 
-@MainActor fileprivate protocol ScopedStateProjectionSource<WrappedValue> {
-    associatedtype WrappedValue
-
-    var rootBinding: Binding<WrappedValue> { get }
-
-    func memberBinding<Member>(
-        _ keyPath: ReferenceWritableKeyPath<WrappedValue, Member>
-    ) -> Binding<Member>
-}
-
 @MainActor @dynamicMemberLookup public struct ScopedStateProjection<Value> {
-    private let source: any ScopedStateProjectionSource<Value>
-
-    fileprivate init<Source: ScopedStateProjectionSource<Value>>(source: Source) {
-        self.source = source
-    }
-
-    fileprivate var rootBinding: Binding<Value> {
-        source.rootBinding
-    }
+    fileprivate let binding: Binding<Value>
 
     public subscript<Member>(dynamicMember keyPath: ReferenceWritableKeyPath<Value, Member>) -> Binding<Member> {
-        source.memberBinding(keyPath)
+        binding[dynamicMember: keyPath]
     }
 }
 
@@ -293,6 +275,10 @@ extension ConnectionDefinition where ConnectionConfiguration == Void {
         private var session: ConnectionSession<Configuration, Value.WrappedValue>?
 
         private var subscription: AnyCancellable?
+
+        private var setValue: @MainActor (Value.WrappedValue) -> Void = { _ in
+            preconditionFailure("Scoped state was written before DynamicProperty.update()")
+        }
 
         func update(
             source: ConnectionDefinition<Configuration, Value>,
@@ -311,6 +297,14 @@ extension ConnectionDefinition where ConnectionConfiguration == Void {
             self.sourceIdentity = sourceIdentity
             self.configuration = configuration
             self.session = session
+            if let setValue = session.setValue {
+                self.setValue = setValue
+            } else {
+                let storage = storage
+                self.setValue = { value in
+                    storage.value = value
+                }
+            }
             storage.value = session.currentValue()
 
             subscription = session.updates
@@ -324,29 +318,12 @@ extension ConnectionDefinition where ConnectionConfiguration == Void {
                 }
         }
 
-        var replaceableValue: Value.WrappedValue {
+        var value: Value.WrappedValue {
             get {
                 storage.requiredValue
             }
             set {
-                guard let session else {
-                    preconditionFailure("Scoped state was written before DynamicProperty.update()")
-                }
-
-                guard let setValue = session.setValue else {
-                    preconditionFailure("A writable connection session must provide a setter")
-                }
-
                 setValue(newValue)
-            }
-        }
-
-        subscript<Member>(member keyPath: ReferenceWritableKeyPath<Value.WrappedValue, Member>) -> Member {
-            get {
-                storage.requiredValue[keyPath: keyPath]
-            }
-            set {
-                storage.requiredValue[keyPath: keyPath] = newValue
             }
         }
 
@@ -365,22 +342,6 @@ extension ConnectionDefinition where ConnectionConfiguration == Void {
             self.configuration = configuration
             session.updateConfiguration(configuration)
             storage.value = session.currentValue()
-        }
-    }
-
-    @MainActor private struct ProjectionSource: ScopedStateProjectionSource {
-        typealias WrappedValue = Value.WrappedValue
-
-        let coordinator: Binding<Coordinator>
-
-        var rootBinding: Binding<WrappedValue> {
-            coordinator.replaceableValue
-        }
-
-        func memberBinding<Member>(
-            _ keyPath: ReferenceWritableKeyPath<WrappedValue, Member>
-        ) -> Binding<Member> {
-            coordinator[dynamicMember: \Coordinator.[member: keyPath]]
         }
     }
 
@@ -423,7 +384,7 @@ extension ConnectionDefinition where ConnectionConfiguration == Void {
     }
 
     public var projectedValue: Value.Projection {
-        let projection = ScopedStateProjection(source: ProjectionSource(coordinator: $coordinator))
+        let projection = ScopedStateProjection(binding: $coordinator.value)
         return Value.transformProjection(projection)
     }
 }
