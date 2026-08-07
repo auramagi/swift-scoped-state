@@ -284,7 +284,7 @@ extension ConnectionDefinition where ConnectionConfiguration == Void {
 
 @MainActor @propertyWrapper public struct ScopedState<Scope, Configuration, Value: ConnectedValue>: @MainActor DynamicProperty {
     @MainActor private final class Coordinator {
-        var value = ScopedStateStorage<Value.WrappedValue>()
+        let storage = ScopedStateStorage<Value.WrappedValue>()
 
         var sourceIdentity: ObjectIdentifier?
 
@@ -296,7 +296,7 @@ extension ConnectionDefinition where ConnectionConfiguration == Void {
 
         var replaceableValue: Value.WrappedValue {
             get {
-                value.requiredValue
+                storage.requiredValue
             }
             set {
                 guard let session else {
@@ -313,10 +313,10 @@ extension ConnectionDefinition where ConnectionConfiguration == Void {
 
         subscript<Member>(member keyPath: ReferenceWritableKeyPath<Value.WrappedValue, Member>) -> Member {
             get {
-                value.requiredValue[keyPath: keyPath]
+                storage.requiredValue[keyPath: keyPath]
             }
             set {
-                value.requiredValue[keyPath: keyPath] = newValue
+                storage.requiredValue[keyPath: keyPath] = newValue
             }
         }
     }
@@ -368,11 +368,11 @@ extension ConnectionDefinition where ConnectionConfiguration == Void {
     }
 
     var valueStorage: ScopedStateStorage<Value.WrappedValue> {
-        coordinator.value
+        coordinator.storage
     }
 
     public var wrappedValue: Value.WrappedValue {
-        coordinator.value.requiredValue
+        coordinator.storage.requiredValue
     }
 
     public var projectedValue: Value.Projection {
@@ -397,7 +397,7 @@ extension ConnectionDefinition where ConnectionConfiguration == Void {
         coordinator.sourceIdentity = sourceIdentity
         coordinator.configuration = configuration
         coordinator.session = session
-        coordinator.value.value = session.currentValue()
+        coordinator.storage.value = session.currentValue()
 
         coordinator.subscription = session.updates
             .eraseToAnyPublisher()
@@ -406,7 +406,7 @@ extension ConnectionDefinition where ConnectionConfiguration == Void {
                 guard coordinator?.sourceIdentity == sourceIdentity else {
                     return
                 }
-                coordinator?.value.value = value
+                coordinator?.storage.value = value
             }
     }
 
@@ -424,6 +424,6 @@ extension ConnectionDefinition where ConnectionConfiguration == Void {
 
         coordinator.configuration = configuration
         session.updateConfiguration(configuration)
-        coordinator.value.value = session.currentValue()
+        coordinator.storage.value = session.currentValue()
     }
 }
