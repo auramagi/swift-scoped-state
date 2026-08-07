@@ -1,3 +1,10 @@
+//
+//  ContainerScopeModifier.swift
+//  ScopedState
+//
+//  Created by Mikhail Apurin on 2026-08-07.
+//
+
 import SwiftUI
 
 @MainActor @propertyWrapper private struct ContainerScopeProvider<Container: AnyObject, Scope>: @MainActor DynamicProperty {

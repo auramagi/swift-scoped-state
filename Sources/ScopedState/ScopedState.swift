@@ -1,3 +1,10 @@
+//
+//  ContainerScopeModifier.swift
+//  ScopedState
+//
+//  Created by Mikhail Apurin on 2026-08-07.
+//
+
 import Combine
 import Observation
 import SwiftUI
