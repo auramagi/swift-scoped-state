@@ -7,11 +7,11 @@
 
 import SwiftUI
 
-@MainActor private struct ScopeModifier<ParentScope, Scope, Input>: ViewModifier {
-    @ScopedState<ParentScope, Input, ReadOnlyConnectedValue<Scope>> private var scope: Scope
+@MainActor private struct ScopeModifier<ParentScope, Input, Connected: ConnectedValue>: ViewModifier {
+    @ScopedState<ParentScope, Input, Connected> private var scope: Connected.WrappedValue
 
     init(
-        connection: KeyPath<ParentScope, Connection<Scope>.Input<Input>>,
+        connection: KeyPath<ParentScope, ConnectionDefinition<Input, Connected>>,
         input: Input
     ) {
         self._scope = ScopedState(connection, input: input)
@@ -26,8 +26,8 @@ extension View {
     /// Connects an input-bearing scope at this SwiftUI location. The live session
     /// retains any state or container created by the connection until the location
     /// disappears.
-    @MainActor public func scope<ParentScope, Scope, Input>(
-        _ connection: KeyPath<ParentScope, Connection<Scope>.Input<Input>>,
+    @MainActor public func scope<ParentScope, Input, Connected: ConnectedValue>(
+        _ connection: KeyPath<ParentScope, ConnectionDefinition<Input, Connected>>,
         input: Input
     ) -> some View {
         modifier(ScopeModifier(connection: connection, input: input))

@@ -86,18 +86,37 @@ public protocol ConnectedValue {
     associatedtype WrappedValue
 
     associatedtype Projection
+
+    @MainActor static func makeProjection(
+        readOnly: ScopedStateProjection<WrappedValue>,
+        writable: Binding<WrappedValue>
+    ) -> Projection
 }
 
 public enum ReadOnlyConnectedValue<Value>: ConnectedValue {
     public typealias WrappedValue = Value
 
     public typealias Projection = ScopedStateProjection<Value>
+
+    @MainActor public static func makeProjection(
+        readOnly: ScopedStateProjection<Value>,
+        writable: Binding<Value>
+    ) -> ScopedStateProjection<Value> {
+        readOnly
+    }
 }
 
 public enum WritableConnectedValue<Value>: ConnectedValue {
     public typealias WrappedValue = Value
 
     public typealias Projection = Binding<Value>
+
+    @MainActor public static func makeProjection(
+        readOnly: ScopedStateProjection<Value>,
+        writable: Binding<Value>
+    ) -> Binding<Value> {
+        writable
+    }
 }
 
 /// The generic implementation underlying the public `Connection<Value>` family.
@@ -380,48 +399,18 @@ extension ConnectionHost {
 
     private let input: Input
 
-    private let makeProjection: @MainActor (Binding<ConnectionHost<Input, Connected.WrappedValue>>) -> Connected.Projection
-
-    public init<Value>(
-        _ keyPath: KeyPath<Scope, Connection<Value>>
-    ) where
-        Input == Void,
-        Connected == ReadOnlyConnectedValue<Value>
-    {
+    public init(
+        _ keyPath: KeyPath<Scope, ConnectionDefinition<Void, Connected>>
+    ) where Input == Void {
         self.init(keyPath, input: ())
     }
 
-    public init<Value>(
-        _ keyPath: KeyPath<Scope, Connection<Value>.Input<Input>>,
+    public init(
+        _ keyPath: KeyPath<Scope, ConnectionDefinition<Input, Connected>>,
         input: Input
-    ) where
-        Connected == ReadOnlyConnectedValue<Value>
-    {
+    ) {
         self.keyPath = keyPath
         self.input = input
-        self.makeProjection = { host in
-            ScopedStateProjection(location: ScopedStateLocation(host: host))
-        }
-    }
-
-    public init<Value>(
-        _ keyPath: KeyPath<Scope, Connection<Value>.Writable>
-    ) where
-        Input == Void,
-        Connected == WritableConnectedValue<Value>
-    {
-        self.init(keyPath, input: ())
-    }
-
-    public init<Value>(
-        _ keyPath: KeyPath<Scope, Connection<Value>.Input<Input>.Writable>,
-        input: Input
-    ) where Connected == WritableConnectedValue<Value> {
-        self.keyPath = keyPath
-        self.input = input
-        self.makeProjection = { host in
-            host.replaceableValue
-        }
     }
 
     public func update() {
@@ -440,6 +429,9 @@ extension ConnectionHost {
     }
 
     public var projectedValue: Connected.Projection {
-        makeProjection($host)
+        Connected.makeProjection(
+            readOnly: ScopedStateProjection(location: ScopedStateLocation(host: $host)),
+            writable: $host.replaceableValue
+        )
     }
 }
