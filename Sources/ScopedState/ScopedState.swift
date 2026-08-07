@@ -147,20 +147,18 @@ public struct ConnectionFactory<Input: Equatable, Value>: ConnectionSource {
 /// The observable value storage used both by connected properties and as the
 /// exact scope type stored in SwiftUI's environment.
 @MainActor @Observable final class ScopedStateStorage<Value> {
-    private(set) var value: Value?
-
-    private(set) var generation = 0
+    private var value: Value?
 
     var requiredValue: Value {
-        guard let value else {
+        if let value {
+            value
+        } else {
             preconditionFailure("Scoped state was read before DynamicProperty.update()")
         }
-        return value
     }
 
     func receive(_ value: Value) {
         self.value = value
-        generation &+= 1
     }
 }
 
@@ -246,7 +244,7 @@ extension ConnectionHost where Source: RootWritableConnectionSource {
 // MARK: - Derived scopes
 
 @MainActor @propertyWrapper private struct ScopeProvider<ParentScope, Input: Equatable, Scope>: @MainActor DynamicProperty {
-    @Environment private var parentScope: ScopedStateStorage<ParentScope>
+    @Environment(ScopedStateStorage<ParentScope>.self) private var parentScope
 
     @State private var host = ConnectionHost<ConnectionFactory<Input, Scope>>()
 
@@ -260,11 +258,9 @@ extension ConnectionHost where Source: RootWritableConnectionSource {
     ) {
         self.factory = factory
         self.input = input
-        self._parentScope = Environment(ScopedStateStorage<ParentScope>.self)
     }
 
     func update() {
-        _ = parentScope.generation
         host.connectIfNeeded(
             to: parentScope.requiredValue[keyPath: factory],
             input: input
@@ -272,8 +268,7 @@ extension ConnectionHost where Source: RootWritableConnectionSource {
     }
 
     var wrappedValue: ScopedStateStorage<Scope> {
-        _ = parentScope.generation
-        return host.storage
+        host.storage
     }
 }
 
@@ -386,7 +381,6 @@ public struct WritableConnectionKey<Scope, Value>: ConnectionKey {
     }
 
     public func update() {
-        _ = scope.generation
         host.connectIfNeeded(
             to: scope.requiredValue[keyPath: key.keyPath],
             input: .value
@@ -394,12 +388,10 @@ public struct WritableConnectionKey<Scope, Value>: ConnectionKey {
     }
 
     public var wrappedValue: Key.Source.Value {
-        _ = scope.generation
-        return host.storage.requiredValue
+        host.storage.requiredValue
     }
 
     public var projectedValue: Key.Projection {
-        _ = scope.generation
-        return key.projection(for: ScopedStateLocation(host: $host))
+        key.projection(for: ScopedStateLocation(host: $host))
     }
 }
