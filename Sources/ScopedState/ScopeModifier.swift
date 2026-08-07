@@ -8,46 +8,17 @@
 import SwiftUI
 
 @MainActor private struct ScopeModifier<ParentScope, Input: Equatable, Scope>: ViewModifier {
-    @ScopeProvider<ParentScope, Input, Scope> private var scope: ScopedStateStorage<Scope>
+    @ScopedState<ReadOnlyConnectionKey<ParentScope, Input, Scope>> private var scope: Scope
 
     init(
         connection: KeyPath<ParentScope, Connection<Input, Scope>>,
         input: Input
     ) {
-        self._scope = ScopeProvider(connection: connection, input: input)
+        self._scope = ScopedState(connection, input: input)
     }
 
     func body(content: Content) -> some View {
-        content.environment(scope)
-    }
-}
-
-@MainActor @propertyWrapper private struct ScopeProvider<ParentScope, Input: Equatable, Scope>: @MainActor DynamicProperty {
-    @Environment(ScopedStateStorage<ParentScope>.self) private var parentScope
-
-    @State private var host = ConnectionHost<Connection<Input, Scope>>()
-
-    private let connection: KeyPath<ParentScope, Connection<Input, Scope>>
-
-    private let input: Input
-
-    init(
-        connection: KeyPath<ParentScope, Connection<Input, Scope>>,
-        input: Input
-    ) {
-        self.connection = connection
-        self.input = input
-    }
-
-    func update() {
-        host.connectIfNeeded(
-            to: parentScope.requiredValue[keyPath: connection],
-            input: input
-        )
-    }
-
-    var wrappedValue: ScopedStateStorage<Scope> {
-        host.storage
+        content.environment(_scope.storage)
     }
 }
 

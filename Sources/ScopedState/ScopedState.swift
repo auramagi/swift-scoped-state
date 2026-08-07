@@ -276,7 +276,7 @@ extension ConnectionHost where Source: RootWritableConnectionSource {
 public protocol ConnectionKey {
     associatedtype Scope
 
-    associatedtype Source: ConnectionSource<NoConnectionInput>
+    associatedtype Source: ConnectionSource
 
     associatedtype Projection
 
@@ -287,7 +287,7 @@ public protocol ConnectionKey {
 
 /// The SwiftUI-owned location from which a connection key derives its
 /// projected value.
-@MainActor public struct ScopedStateLocation<Source: ConnectionSource<NoConnectionInput>> {
+@MainActor public struct ScopedStateLocation<Source: ConnectionSource> {
     fileprivate let host: Binding<ConnectionHost<Source>>
 
     fileprivate func memberBinding<Member>(
@@ -297,32 +297,32 @@ public protocol ConnectionKey {
     }
 }
 
-public struct ReadOnlyConnectionKey<Scope, Value>: ConnectionKey {
-    public typealias Source = Connection<NoConnectionInput, Value>
+public struct ReadOnlyConnectionKey<Scope, Input: Equatable, Value>: ConnectionKey {
+    public typealias Source = Connection<Input, Value>
 
-    public let keyPath: KeyPath<Scope, Connection<NoConnectionInput, Value>>
+    public let keyPath: KeyPath<Scope, Connection<Input, Value>>
 
     @MainActor public func projection(
-        for location: ScopedStateLocation<Connection<NoConnectionInput, Value>>
-    ) -> ScopedStateProjection<Value> {
+        for location: ScopedStateLocation<Connection<Input, Value>>
+    ) -> ScopedStateProjection<Input, Value> {
         ScopedStateProjection(location: location)
     }
 }
 
-public struct WritableConnectionKey<Scope, Value>: ConnectionKey {
-    public typealias Source = WritableConnection<NoConnectionInput, Value>
+public struct WritableConnectionKey<Scope, Input: Equatable, Value>: ConnectionKey {
+    public typealias Source = WritableConnection<Input, Value>
 
-    public let keyPath: KeyPath<Scope, WritableConnection<NoConnectionInput, Value>>
+    public let keyPath: KeyPath<Scope, WritableConnection<Input, Value>>
 
     @MainActor public func projection(
-        for location: ScopedStateLocation<WritableConnection<NoConnectionInput, Value>>
+        for location: ScopedStateLocation<WritableConnection<Input, Value>>
     ) -> Binding<Value> {
         location.host.replaceableValue
     }
 }
 
-@MainActor @dynamicMemberLookup public struct ScopedStateProjection<Value> {
-    fileprivate let location: ScopedStateLocation<Connection<NoConnectionInput, Value>>
+@MainActor @dynamicMemberLookup public struct ScopedStateProjection<Input: Equatable, Value> {
+    fileprivate let location: ScopedStateLocation<Connection<Input, Value>>
 
     public subscript<Member>(dynamicMember keyPath: ReferenceWritableKeyPath<Value, Member>) -> Binding<Member> {
         location.memberBinding(keyPath)
@@ -332,31 +332,51 @@ public struct WritableConnectionKey<Scope, Value>: ConnectionKey {
 // MARK: - Scoped state dynamic property
 
 @MainActor @propertyWrapper public struct ScopedState<Key: ConnectionKey>: @MainActor DynamicProperty {
-    @Environment private var scope: ScopedStateStorage<Key.Scope>
+    @Environment(ScopedStateStorage<Key.Scope>.self) private var scope
 
     @State private var host = ConnectionHost<Key.Source>()
 
     private let key: Key
 
+    private let input: Key.Source.Input
+
     public init<Scope, Value>(
         _ keyPath: KeyPath<Scope, Connection<NoConnectionInput, Value>>
-    ) where Key == ReadOnlyConnectionKey<Scope, Value> {
+    ) where Key == ReadOnlyConnectionKey<Scope, NoConnectionInput, Value> {
+        self.init(keyPath, input: .value)
+    }
+
+    public init<Scope, Input: Equatable, Value>(
+        _ keyPath: KeyPath<Scope, Connection<Input, Value>>,
+        input: Input
+    ) where Key == ReadOnlyConnectionKey<Scope, Input, Value> {
         self.key = ReadOnlyConnectionKey(keyPath: keyPath)
-        self._scope = Environment(ScopedStateStorage<Scope>.self)
+        self.input = input
     }
 
     public init<Scope, Value>(
         _ keyPath: KeyPath<Scope, WritableConnection<NoConnectionInput, Value>>
-    ) where Key == WritableConnectionKey<Scope, Value> {
+    ) where Key == WritableConnectionKey<Scope, NoConnectionInput, Value> {
+        self.init(keyPath, input: .value)
+    }
+
+    public init<Scope, Input: Equatable, Value>(
+        _ keyPath: KeyPath<Scope, WritableConnection<Input, Value>>,
+        input: Input
+    ) where Key == WritableConnectionKey<Scope, Input, Value> {
         self.key = WritableConnectionKey(keyPath: keyPath)
-        self._scope = Environment(ScopedStateStorage<Scope>.self)
+        self.input = input
     }
 
     public func update() {
         host.connectIfNeeded(
             to: scope.requiredValue[keyPath: key.keyPath],
-            input: .value
+            input: input
         )
+    }
+
+    var storage: ScopedStateStorage<Key.Source.Value> {
+        host.storage
     }
 
     public var wrappedValue: Key.Source.Value {
