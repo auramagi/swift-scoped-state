@@ -7,14 +7,14 @@
 
 import SwiftUI
 
-@MainActor private struct ScopeModifier<ParentScope, Input, Connected: ConnectedValue>: ViewModifier {
-    @ScopedState<ParentScope, Input, Connected> private var scope: Connected.WrappedValue
+@MainActor private struct ScopeModifier<ParentScope, Configuration, Connected: ConnectedValue>: ViewModifier {
+    @ScopedState<ParentScope, Configuration, Connected> private var scope: Connected.WrappedValue
 
     init(
-        connection: KeyPath<ParentScope, ConnectionDefinition<Input, Connected>>,
-        input: Input
+        connection: KeyPath<ParentScope, ConnectionDefinition<Configuration, Connected>>,
+        configuration: Configuration
     ) {
-        self._scope = ScopedState(connection, input: input)
+        self._scope = ScopedState(connection, configuration: configuration)
     }
 
     func body(content: Content) -> some View {
@@ -23,22 +23,22 @@ import SwiftUI
 }
 
 extension View {
-    /// Connects a scope without input at this SwiftUI location. The live session
+    /// Connects a scope without configuration at this SwiftUI location. The live session
     /// retains any state or container created by the connection until the location
     /// disappears.
     @MainActor public func scope<ParentScope, Connected: ConnectedValue>(
         _ connection: KeyPath<ParentScope, ConnectionDefinition<Void, Connected>>
     ) -> some View {
-        scope(connection, input: ())
+        scope(connection, configuration: ())
     }
 
-    /// Connects an input-bearing scope at this SwiftUI location. The live session
+    /// Connects a configured scope at this SwiftUI location. The live session
     /// retains any state or container created by the connection until the location
     /// disappears.
-    @MainActor public func scope<ParentScope, Input, Connected: ConnectedValue>(
-        _ connection: KeyPath<ParentScope, ConnectionDefinition<Input, Connected>>,
-        input: Input
+    @MainActor public func scope<ParentScope, Configuration, Connected: ConnectedValue>(
+        _ connection: KeyPath<ParentScope, ConnectionDefinition<Configuration, Connected>>,
+        configuration: Configuration
     ) -> some View {
-        modifier(ScopeModifier(connection: connection, input: input))
+        modifier(ScopeModifier(connection: connection, configuration: configuration))
     }
 }

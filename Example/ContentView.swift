@@ -50,7 +50,7 @@ struct ContentView: View {
 
                 if isProductScopeMounted {
                     ProductDetailDemo()
-                        .scope(\AppScope.productDetail, input: input)
+                        .scope(\AppScope.productDetail, configuration: configuration)
                 }
             }
             .padding(24)
@@ -58,8 +58,8 @@ struct ContentView: View {
         }
     }
 
-    private var input: ProductDetailInput {
-        ProductDetailInput(productID: productID, pricingMode: pricingMode)
+    private var configuration: ProductDetailConfiguration {
+        ProductDetailConfiguration(productID: productID, pricingMode: pricingMode)
     }
 }
 
@@ -80,7 +80,7 @@ private struct ScopeControls: View {
     @Binding var isProductScopeMounted: Bool
 
     var body: some View {
-        GroupBox("Scope input") {
+        GroupBox("Scope configuration") {
             VStack(alignment: .leading, spacing: 16) {
                 Toggle("Mount product subtree", isOn: $isProductScopeMounted)
 
@@ -250,7 +250,7 @@ extension Bool {
     }
 }
 
-struct ProductDetailInput: Equatable {
+struct ProductDetailConfiguration: Equatable {
     var productID: Int
 
     var pricingMode: PricingMode
@@ -269,7 +269,7 @@ struct ProductDetailSnapshot: Equatable {
 }
 
 @MainActor struct AppScope {
-    let productDetail: Connection<ProductScope>.Input<ProductDetailInput>
+    let productDetail: Connection<ProductScope>.Configuration<ProductDetailConfiguration>
 }
 
 @MainActor struct AppDiagnosticsScope {
@@ -285,13 +285,13 @@ struct ProductDetailSnapshot: Equatable {
 
     var appScope: AppScope {
         AppScope(
-            productDetail: .init { input in
-                let container = ProductDetailContainer(appContainer: self, input: input)
+            productDetail: .init { configuration in
+                let container = ProductDetailContainer(appContainer: self, configuration: configuration)
                 let scope = container.scope
                 return ConnectionSession(
                     currentValue: { scope },
                     updates: Empty<ProductScope, Never>(completeImmediately: false),
-                    updateInput: { container.update(input: $0) }
+                    updateConfiguration: { container.update(configuration: $0) }
                 )
             }
         )
@@ -400,7 +400,7 @@ struct ProductDetailSnapshot: Equatable {
 
     private let appContainer: AppContainer
 
-    private var input: ProductDetailInput
+    private var configuration: ProductDetailConfiguration
 
     private var updateCount = 0
 
@@ -418,23 +418,23 @@ struct ProductDetailSnapshot: Equatable {
 
     private var favoriteSubscription: AnyCancellable?
 
-    init(appContainer: AppContainer, input: ProductDetailInput) {
+    init(appContainer: AppContainer, configuration: ProductDetailConfiguration) {
         let containerID = UUID()
 
         self.appContainerID = appContainer.containerID
         self.containerID = containerID
         self.appContainer = appContainer
-        self.input = input
-        self.orderSubject = CurrentValueSubject(appContainer.orderState(id: input.productID))
-        self.availabilitySubject = CurrentValueSubject(Self.isAvailable(productID: input.productID))
-        self.favoriteSubject = CurrentValueSubject(appContainer.isFavorite(id: input.productID))
+        self.configuration = configuration
+        self.orderSubject = CurrentValueSubject(appContainer.orderState(id: configuration.productID))
+        self.availabilitySubject = CurrentValueSubject(Self.isAvailable(productID: configuration.productID))
+        self.favoriteSubject = CurrentValueSubject(appContainer.isFavorite(id: configuration.productID))
         self.optionsSubject = CurrentValueSubject(ProductOptions())
         self.snapshotSubject = CurrentValueSubject(
             ProductDetailSnapshot(
                 appContainerID: appContainer.containerID,
                 containerID: containerID,
-                productID: input.productID,
-                pricingMode: input.pricingMode,
+                productID: configuration.productID,
+                pricingMode: configuration.pricingMode,
                 updateCount: 0
             )
         )
@@ -442,14 +442,14 @@ struct ProductDetailSnapshot: Equatable {
         connectToAppContainer()
     }
 
-    func update(input: ProductDetailInput) {
-        let productChanged = self.input.productID != input.productID
-        self.input = input
+    func update(configuration: ProductDetailConfiguration) {
+        let productChanged = self.configuration.productID != configuration.productID
+        self.configuration = configuration
         updateCount += 1
 
         if productChanged {
             connectToAppContainer()
-            availabilitySubject.send(Self.isAvailable(productID: input.productID))
+            availabilitySubject.send(Self.isAvailable(productID: configuration.productID))
         }
 
         snapshotSubject.send(snapshot)
@@ -492,19 +492,19 @@ struct ProductDetailSnapshot: Equatable {
     }
 
     func buy() {
-        appContainer.buy(id: input.productID)
+        appContainer.buy(id: configuration.productID)
     }
 
     func removeFromCart() {
-        appContainer.removeFromCart(id: input.productID)
+        appContainer.removeFromCart(id: configuration.productID)
     }
 
     private var snapshot: ProductDetailSnapshot {
         ProductDetailSnapshot(
             appContainerID: appContainerID,
             containerID: containerID,
-            productID: input.productID,
-            pricingMode: input.pricingMode,
+            productID: configuration.productID,
+            pricingMode: configuration.pricingMode,
             updateCount: updateCount
         )
     }
@@ -519,18 +519,18 @@ struct ProductDetailSnapshot: Equatable {
     }
 
     private func setFavorite(_ value: Bool) {
-        appContainer.setFavorite(value, id: input.productID)
+        appContainer.setFavorite(value, id: configuration.productID)
     }
 
     private func connectToAppContainer() {
         orderSubscription?.cancel()
         favoriteSubscription?.cancel()
 
-        orderSubscription = appContainer.orderUpdates(id: input.productID)
+        orderSubscription = appContainer.orderUpdates(id: configuration.productID)
             .sink { [weak self] value in
                 self?.orderSubject.send(value)
             }
-        favoriteSubscription = appContainer.favoriteUpdates(id: input.productID)
+        favoriteSubscription = appContainer.favoriteUpdates(id: configuration.productID)
             .sink { [weak self] value in
                 self?.favoriteSubject.send(value)
             }

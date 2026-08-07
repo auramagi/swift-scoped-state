@@ -15,69 +15,69 @@ final class IdentityToken {}
 
 /// A live connection created for one SwiftUI location.
 /// Its closures retain any implementation object needed to keep the value alive.
-@MainActor public struct ConnectionSession<Input, Value> {
+@MainActor public struct ConnectionSession<Configuration, Value> {
     let currentValue: @MainActor () -> Value
 
     let updates: any Publisher<Value, Never>
 
     let setValue: (@MainActor (Value) -> Void)?
 
-    let updateInput: @MainActor (Input) -> Void
+    let updateConfiguration: @MainActor (Configuration) -> Void
 
     public init(
         currentValue: @escaping @MainActor () -> Value,
         updates: any Publisher<Value, Never>,
-        updateInput: @escaping @MainActor (Input) -> Void = { _ in }
+        updateConfiguration: @escaping @MainActor (Configuration) -> Void = { _ in }
     ) {
         self.currentValue = currentValue
         self.updates = updates
         self.setValue = nil
-        self.updateInput = updateInput
+        self.updateConfiguration = updateConfiguration
     }
 
     init(
         currentValue: @escaping @MainActor () -> Value,
         updates: any Publisher<Value, Never>,
         setValue: @escaping @MainActor (Value) -> Void,
-        updateInput: @escaping @MainActor (Input) -> Void
+        updateConfiguration: @escaping @MainActor (Configuration) -> Void
     ) {
         self.currentValue = currentValue
         self.updates = updates
         self.setValue = setValue
-        self.updateInput = updateInput
+        self.updateConfiguration = updateConfiguration
     }
 }
 
 /// A live writable connection created for one SwiftUI location.
 /// Its setter is required, so writable connections cannot be constructed
 /// without root replacement support.
-@MainActor public struct WritableConnectionSession<Input, Value> {
+@MainActor public struct WritableConnectionSession<Configuration, Value> {
     let currentValue: @MainActor () -> Value
 
     let updates: any Publisher<Value, Never>
 
     let setValue: @MainActor (Value) -> Void
 
-    let updateInput: @MainActor (Input) -> Void
+    let updateConfiguration: @MainActor (Configuration) -> Void
 
     public init(
         currentValue: @escaping @MainActor () -> Value,
         updates: any Publisher<Value, Never>,
         setValue: @escaping @MainActor (Value) -> Void,
-        updateInput: @escaping @MainActor (Input) -> Void = { _ in }
+        updateConfiguration: @escaping @MainActor (Configuration) -> Void = { _ in }
     ) {
         self.currentValue = currentValue
         self.updates = updates
         self.setValue = setValue
-        self.updateInput = updateInput
+        self.updateConfiguration = updateConfiguration
     }
 
-    var connectionSession: ConnectionSession<Input, Value> {
+    var connectionSession: ConnectionSession<Configuration, Value> {
         ConnectionSession(
             currentValue: currentValue,
             updates: updates,
             setValue: setValue,
-            updateInput: updateInput
+            updateConfiguration: updateConfiguration
         )
     }
 }
@@ -120,22 +120,22 @@ public enum WritableConnectedValue<Value>: ConnectedValue {
 }
 
 /// The generic implementation underlying the public `Connection<Value>` family.
-@MainActor public struct ConnectionDefinition<ConnectionInput, Connected: ConnectedValue> {
-    public typealias Input<NewInput> = ConnectionDefinition<NewInput, Connected>
+@MainActor public struct ConnectionDefinition<ConnectionConfiguration, Connected: ConnectedValue> {
+    public typealias Configuration<NewConfiguration> = ConnectionDefinition<NewConfiguration, Connected>
 
-    public typealias Writable = ConnectionDefinition<ConnectionInput, WritableConnectedValue<Connected.WrappedValue>>
+    public typealias Writable = ConnectionDefinition<ConnectionConfiguration, WritableConnectedValue<Connected.WrappedValue>>
 
-    let inputsEqual: @MainActor (ConnectionInput, ConnectionInput) -> Bool
+    let configurationsEqual: @MainActor (ConnectionConfiguration, ConnectionConfiguration) -> Bool
 
-    let createSession: @MainActor (ConnectionInput) -> ConnectionSession<ConnectionInput, Connected.WrappedValue>
+    let createSession: @MainActor (ConnectionConfiguration) -> ConnectionSession<ConnectionConfiguration, Connected.WrappedValue>
 
     let identityToken = IdentityToken()
 
     private init(
-        inputsEqual: @escaping @MainActor (ConnectionInput, ConnectionInput) -> Bool,
-        createSession: @escaping @MainActor (ConnectionInput) -> ConnectionSession<ConnectionInput, Connected.WrappedValue>
+        configurationsEqual: @escaping @MainActor (ConnectionConfiguration, ConnectionConfiguration) -> Bool,
+        createSession: @escaping @MainActor (ConnectionConfiguration) -> ConnectionSession<ConnectionConfiguration, Connected.WrappedValue>
     ) {
-        self.inputsEqual = inputsEqual
+        self.configurationsEqual = configurationsEqual
         self.createSession = createSession
     }
 
@@ -143,12 +143,17 @@ public enum WritableConnectedValue<Value>: ConnectedValue {
         ObjectIdentifier(identityToken)
     }
 
-    @MainActor public func inputsAreEqual(_ lhs: ConnectionInput, _ rhs: ConnectionInput) -> Bool {
-        inputsEqual(lhs, rhs)
+    @MainActor public func configurationsAreEqual(
+        _ lhs: ConnectionConfiguration,
+        _ rhs: ConnectionConfiguration
+    ) -> Bool {
+        configurationsEqual(lhs, rhs)
     }
 
-    @MainActor public func makeSession(input: ConnectionInput) -> ConnectionSession<ConnectionInput, Connected.WrappedValue> {
-        createSession(input)
+    @MainActor public func makeSession(
+        configuration: ConnectionConfiguration
+    ) -> ConnectionSession<ConnectionConfiguration, Connected.WrappedValue> {
+        createSession(configuration)
     }
 }
 
@@ -156,33 +161,33 @@ public typealias Connection<Value> = ConnectionDefinition<Void, ReadOnlyConnecte
 
 extension ConnectionDefinition {
     public init<Value>(
-        inputsAreEqual: @escaping @MainActor (ConnectionInput, ConnectionInput) -> Bool,
-        createSession: @escaping @MainActor (ConnectionInput) -> ConnectionSession<ConnectionInput, Value>
+        configurationsAreEqual: @escaping @MainActor (ConnectionConfiguration, ConnectionConfiguration) -> Bool,
+        createSession: @escaping @MainActor (ConnectionConfiguration) -> ConnectionSession<ConnectionConfiguration, Value>
     ) where Connected == ReadOnlyConnectedValue<Value> {
         self.init(
-            inputsEqual: inputsAreEqual,
+            configurationsEqual: configurationsAreEqual,
             createSession: createSession
         )
     }
 }
 
-extension ConnectionDefinition where ConnectionInput: Equatable {
+extension ConnectionDefinition where ConnectionConfiguration: Equatable {
     public init<Value>(
-        createSession: @escaping @MainActor (ConnectionInput) -> ConnectionSession<ConnectionInput, Value>
+        createSession: @escaping @MainActor (ConnectionConfiguration) -> ConnectionSession<ConnectionConfiguration, Value>
     ) where Connected == ReadOnlyConnectedValue<Value> {
         self.init(
-            inputsAreEqual: { $0 == $1 },
+            configurationsAreEqual: { $0 == $1 },
             createSession: createSession
         )
     }
 }
 
-extension ConnectionDefinition where ConnectionInput == Void {
+extension ConnectionDefinition where ConnectionConfiguration == Void {
     public init<Value>(
         createSession: @escaping @MainActor () -> ConnectionSession<Void, Value>
     ) where Connected == ReadOnlyConnectedValue<Value> {
         self.init(
-            inputsAreEqual: { _, _ in true },
+            configurationsAreEqual: { _, _ in true },
             createSession: { _ in createSession() }
         )
     }
@@ -202,33 +207,33 @@ extension ConnectionDefinition where ConnectionInput == Void {
 
 extension ConnectionDefinition {
     public init<Value>(
-        inputsAreEqual: @escaping @MainActor (ConnectionInput, ConnectionInput) -> Bool,
-        createSession: @escaping @MainActor (ConnectionInput) -> WritableConnectionSession<ConnectionInput, Value>
+        configurationsAreEqual: @escaping @MainActor (ConnectionConfiguration, ConnectionConfiguration) -> Bool,
+        createSession: @escaping @MainActor (ConnectionConfiguration) -> WritableConnectionSession<ConnectionConfiguration, Value>
     ) where Connected == WritableConnectedValue<Value> {
         self.init(
-            inputsEqual: inputsAreEqual,
+            configurationsEqual: configurationsAreEqual,
             createSession: { createSession($0).connectionSession }
         )
     }
 }
 
-extension ConnectionDefinition where ConnectionInput: Equatable {
+extension ConnectionDefinition where ConnectionConfiguration: Equatable {
     public init<Value>(
-        createSession: @escaping @MainActor (ConnectionInput) -> WritableConnectionSession<ConnectionInput, Value>
+        createSession: @escaping @MainActor (ConnectionConfiguration) -> WritableConnectionSession<ConnectionConfiguration, Value>
     ) where Connected == WritableConnectedValue<Value> {
         self.init(
-            inputsAreEqual: { $0 == $1 },
+            configurationsAreEqual: { $0 == $1 },
             createSession: createSession
         )
     }
 }
 
-extension ConnectionDefinition where ConnectionInput == Void {
+extension ConnectionDefinition where ConnectionConfiguration == Void {
     public init<Value>(
         createSession: @escaping @MainActor () -> WritableConnectionSession<Void, Value>
     ) where Connected == WritableConnectedValue<Value> {
         self.init(
-            inputsAreEqual: { _, _ in true },
+            configurationsAreEqual: { _, _ in true },
             createSession: { _ in createSession() }
         )
     }
@@ -269,34 +274,34 @@ extension ConnectionDefinition where ConnectionInput == Void {
 }
 
 /// The single, fully typed lifecycle owner used for ordinary state and scopes.
-/// Its source, input, session, and output types remain known after connection.
-@MainActor final class ConnectionHost<Input, Value> {
+/// Its source, configuration, session, and value types remain known after connection.
+@MainActor final class ConnectionHost<Configuration, Value> {
     let storage = ScopedStateStorage<Value>()
 
     private var sourceIdentity: ObjectIdentifier?
 
-    private var input: Input?
+    private var configuration: Configuration?
 
-    private var session: ConnectionSession<Input, Value>?
+    private var session: ConnectionSession<Configuration, Value>?
 
     private var subscription: AnyCancellable?
 
     func connectIfNeeded<Connected: ConnectedValue>(
-        to source: ConnectionDefinition<Input, Connected>,
-        input: Input
+        to source: ConnectionDefinition<Configuration, Connected>,
+        configuration: Configuration
     ) where Connected.WrappedValue == Value {
         let sourceIdentity = source.identity
 
         guard self.sourceIdentity != sourceIdentity else {
-            updateInputIfNeeded(input, source: source)
+            updateConfigurationIfNeeded(configuration, source: source)
             return
         }
 
-        let session = source.makeSession(input: input)
+        let session = source.makeSession(configuration: configuration)
         subscription?.cancel()
 
         self.sourceIdentity = sourceIdentity
-        self.input = input
+        self.configuration = configuration
         self.session = session
         storage.receive(session.currentValue())
 
@@ -311,20 +316,20 @@ extension ConnectionDefinition where ConnectionInput == Void {
             }
     }
 
-    private func updateInputIfNeeded<Connected: ConnectedValue>(
-        _ input: Input,
-        source: ConnectionDefinition<Input, Connected>
+    private func updateConfigurationIfNeeded<Connected: ConnectedValue>(
+        _ configuration: Configuration,
+        source: ConnectionDefinition<Configuration, Connected>
     ) where Connected.WrappedValue == Value {
         guard
-            let previousInput = self.input,
-            !source.inputsAreEqual(previousInput, input),
+            let previousConfiguration = self.configuration,
+            !source.configurationsAreEqual(previousConfiguration, configuration),
             let session
         else {
             return
         }
 
-        self.input = input
-        session.updateInput(input)
+        self.configuration = configuration
+        session.updateConfiguration(configuration)
         storage.receive(session.currentValue())
     }
 
@@ -366,13 +371,13 @@ extension ConnectionHost {
 }
 
 /// The SwiftUI-owned location from which `ScopedState` derives its projection.
-@MainActor private struct ScopedStateLocation<Input, Value>: ScopedStateProjectionLocation {
-    fileprivate let host: Binding<ConnectionHost<Input, Value>>
+@MainActor private struct ScopedStateLocation<Configuration, Value>: ScopedStateProjectionLocation {
+    fileprivate let host: Binding<ConnectionHost<Configuration, Value>>
 
     func memberBinding<Member>(
         _ keyPath: ReferenceWritableKeyPath<Value, Member>
     ) -> Binding<Member> {
-        host[dynamicMember: \ConnectionHost<Input, Value>.[member: keyPath]]
+        host[dynamicMember: \ConnectionHost<Configuration, Value>.[member: keyPath]]
     }
 }
 
@@ -390,33 +395,33 @@ extension ConnectionHost {
 
 // MARK: - Scoped state dynamic property
 
-@MainActor @propertyWrapper public struct ScopedState<Scope, Input, Connected: ConnectedValue>: @MainActor DynamicProperty {
+@MainActor @propertyWrapper public struct ScopedState<Scope, Configuration, Connected: ConnectedValue>: @MainActor DynamicProperty {
     @Environment(ScopedStateStorage<Scope>.self) private var scope
 
-    @State private var host = ConnectionHost<Input, Connected.WrappedValue>()
+    @State private var host = ConnectionHost<Configuration, Connected.WrappedValue>()
 
-    private let keyPath: KeyPath<Scope, ConnectionDefinition<Input, Connected>>
+    private let keyPath: KeyPath<Scope, ConnectionDefinition<Configuration, Connected>>
 
-    private let input: Input
+    private let configuration: Configuration
 
     public init(
         _ keyPath: KeyPath<Scope, ConnectionDefinition<Void, Connected>>
-    ) where Input == Void {
-        self.init(keyPath, input: ())
+    ) where Configuration == Void {
+        self.init(keyPath, configuration: ())
     }
 
     public init(
-        _ keyPath: KeyPath<Scope, ConnectionDefinition<Input, Connected>>,
-        input: Input
+        _ keyPath: KeyPath<Scope, ConnectionDefinition<Configuration, Connected>>,
+        configuration: Configuration
     ) {
         self.keyPath = keyPath
-        self.input = input
+        self.configuration = configuration
     }
 
     public func update() {
         host.connectIfNeeded(
             to: scope.requiredValue[keyPath: keyPath],
-            input: input
+            configuration: configuration
         )
     }
 
