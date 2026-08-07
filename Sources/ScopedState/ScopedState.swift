@@ -286,13 +286,43 @@ extension ConnectionDefinition where ConnectionConfiguration == Void {
     @MainActor private final class Coordinator {
         let storage = ScopedStateStorage<Value.WrappedValue>()
 
-        var sourceIdentity: ObjectIdentifier?
+        private var sourceIdentity: ObjectIdentifier?
 
-        var configuration: Configuration?
+        private var configuration: Configuration?
 
-        var session: ConnectionSession<Configuration, Value.WrappedValue>?
+        private var session: ConnectionSession<Configuration, Value.WrappedValue>?
 
-        var subscription: AnyCancellable?
+        private var subscription: AnyCancellable?
+
+        func update(
+            source: ConnectionDefinition<Configuration, Value>,
+            configuration: Configuration
+        ) {
+            let sourceIdentity = source.identity
+
+            guard self.sourceIdentity != sourceIdentity else {
+                updateConfigurationIfNeeded(configuration, source: source)
+                return
+            }
+
+            let session = source.makeSession(configuration: configuration)
+            subscription?.cancel()
+
+            self.sourceIdentity = sourceIdentity
+            self.configuration = configuration
+            self.session = session
+            storage.value = session.currentValue()
+
+            subscription = session.updates
+                .eraseToAnyPublisher()
+                .receive(on: DispatchQueue.main)
+                .sink { [weak self] value in
+                    guard self?.sourceIdentity == sourceIdentity else {
+                        return
+                    }
+                    self?.storage.value = value
+                }
+        }
 
         var replaceableValue: Value.WrappedValue {
             get {
@@ -318,6 +348,23 @@ extension ConnectionDefinition where ConnectionConfiguration == Void {
             set {
                 storage.requiredValue[keyPath: keyPath] = newValue
             }
+        }
+
+        private func updateConfigurationIfNeeded(
+            _ configuration: Configuration,
+            source: ConnectionDefinition<Configuration, Value>
+        ) {
+            guard
+                let previousConfiguration = self.configuration,
+                !source.configurationsAreEqual(previousConfiguration, configuration),
+                let session
+            else {
+                return
+            }
+
+            self.configuration = configuration
+            session.updateConfiguration(configuration)
+            storage.value = session.currentValue()
         }
     }
 
@@ -361,8 +408,8 @@ extension ConnectionDefinition where ConnectionConfiguration == Void {
     }
 
     public func update() {
-        connectIfNeeded(
-            to: scope.requiredValue[keyPath: keyPath],
+        coordinator.update(
+            source: scope.requiredValue[keyPath: keyPath],
             configuration: configuration
         )
     }
@@ -378,52 +425,5 @@ extension ConnectionDefinition where ConnectionConfiguration == Void {
     public var projectedValue: Value.Projection {
         let projection = ScopedStateProjection(source: ProjectionSource(coordinator: $coordinator))
         return Value.transformProjection(projection)
-    }
-
-    private func connectIfNeeded(
-        to source: ConnectionDefinition<Configuration, Value>,
-        configuration: Configuration
-    ) {
-        let sourceIdentity = source.identity
-
-        guard coordinator.sourceIdentity != sourceIdentity else {
-            updateConfigurationIfNeeded(configuration, source: source)
-            return
-        }
-
-        let session = source.makeSession(configuration: configuration)
-        coordinator.subscription?.cancel()
-
-        coordinator.sourceIdentity = sourceIdentity
-        coordinator.configuration = configuration
-        coordinator.session = session
-        coordinator.storage.value = session.currentValue()
-
-        coordinator.subscription = session.updates
-            .eraseToAnyPublisher()
-            .receive(on: DispatchQueue.main)
-            .sink { [weak coordinator] value in
-                guard coordinator?.sourceIdentity == sourceIdentity else {
-                    return
-                }
-                coordinator?.storage.value = value
-            }
-    }
-
-    private func updateConfigurationIfNeeded(
-        _ configuration: Configuration,
-        source: ConnectionDefinition<Configuration, Value>
-    ) {
-        guard
-            let previousConfiguration = coordinator.configuration,
-            !source.configurationsAreEqual(previousConfiguration, configuration),
-            let session = coordinator.session
-        else {
-            return
-        }
-
-        coordinator.configuration = configuration
-        session.updateConfiguration(configuration)
-        coordinator.storage.value = session.currentValue()
     }
 }

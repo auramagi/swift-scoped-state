@@ -26,9 +26,19 @@ import SwiftUI
     @MainActor private final class Coordinator {
         let storage = ScopedStateStorage<Scope>()
 
-        var container: Container?
+        private var container: Container?
 
-        var keyPath: KeyPath<Container, Scope>?
+        private var keyPath: KeyPath<Container, Scope>?
+
+        func update(container: Container, keyPath: KeyPath<Container, Scope>) {
+            guard self.container !== container || self.keyPath != keyPath else {
+                return
+            }
+
+            storage.value = container[keyPath: keyPath]
+            self.container = container
+            self.keyPath = keyPath
+        }
     }
 
     @State private var coordinator = Coordinator()
@@ -38,13 +48,7 @@ import SwiftUI
     let keyPath: KeyPath<Container, Scope>
 
     func update() {
-        guard coordinator.container !== container || coordinator.keyPath != keyPath else {
-            return
-        }
-
-        coordinator.storage.value = container[keyPath: keyPath]
-        coordinator.container = container
-        coordinator.keyPath = keyPath
+        coordinator.update(container: container, keyPath: keyPath)
     }
 
     var wrappedValue: ScopedStateStorage<Scope> {
