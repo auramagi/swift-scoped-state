@@ -245,7 +245,7 @@ extension ConnectionHost where Source: RootWritableConnectionSource {
 
 // MARK: - Derived scopes
 
-@MainActor @propertyWrapper private struct ResolvedScope<ParentScope, Input: Equatable, Scope>: @MainActor DynamicProperty {
+@MainActor @propertyWrapper private struct ScopeProvider<ParentScope, Input: Equatable, Scope>: @MainActor DynamicProperty {
     @Environment private var parentScope: ScopedStateStorage<ParentScope>
 
     @State private var host = ConnectionHost<ConnectionFactory<Input, Scope>>()
@@ -278,13 +278,13 @@ extension ConnectionHost where Source: RootWritableConnectionSource {
 }
 
 @MainActor private struct ScopeModifier<ParentScope, Input: Equatable, Scope>: ViewModifier {
-    @ResolvedScope<ParentScope, Input, Scope> private var scope: ScopedStateStorage<Scope>
+    @ScopeProvider<ParentScope, Input, Scope> private var scope: ScopedStateStorage<Scope>
 
     init(
         factory: KeyPath<ParentScope, ConnectionFactory<Input, Scope>>,
         input: Input
     ) {
-        self._scope = ResolvedScope(factory: factory, input: input)
+        self._scope = ScopeProvider(factory: factory, input: input)
     }
 
     func body(content: Content) -> some View {
