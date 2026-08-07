@@ -269,11 +269,11 @@ struct ProductDetailSnapshot: Equatable {
 }
 
 @MainActor struct AppScope {
-    let productDetail: ConnectionFactory<ProductDetailInput, ProductScope>
+    let productDetail: Connection<ProductDetailInput, ProductScope>
 }
 
 @MainActor struct AppDiagnosticsScope {
-    let containerID: Connection<UUID>
+    let containerID: Connection<NoConnectionInput, UUID>
 }
 
 @MainActor final class AppContainer {
@@ -285,7 +285,7 @@ struct ProductDetailSnapshot: Equatable {
 
     var appScope: AppScope {
         AppScope(
-            productDetail: ConnectionFactory { input in
+            productDetail: Connection { input in
                 let container = ProductDetailContainer(appContainer: self, input: input)
                 let scope = container.scope
                 return ConnectionSession(
@@ -380,15 +380,15 @@ struct ProductDetailSnapshot: Equatable {
 @MainActor struct ProductScope {
     let orderState: WritableConnection<OrderState>
 
-    let snapshot: Connection<ProductDetailSnapshot>
+    let snapshot: Connection<NoConnectionInput, ProductDetailSnapshot>
 
-    let isAvailable: Connection<Bool>
+    let isAvailable: Connection<NoConnectionInput, Bool>
 
     let isFavorite: WritableConnection<Bool>
 
-    let options: Connection<ProductOptions>
+    let options: Connection<NoConnectionInput, ProductOptions>
 
-    let optionControls: Connection<ProductOptionControls>
+    let optionControls: Connection<NoConnectionInput, ProductOptionControls>
 
     let replaceableOptions: WritableConnection<ProductOptions>
 }

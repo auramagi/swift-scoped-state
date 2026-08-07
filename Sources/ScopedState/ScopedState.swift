@@ -41,7 +41,7 @@ public enum NoConnectionInput: Equatable {
     }
 }
 
-public protocol ConnectionSource: SendableMetatype {
+public protocol ConnectionSource<Input>: SendableMetatype {
     associatedtype Input: Equatable
 
     associatedtype Value
@@ -51,35 +51,40 @@ public protocol ConnectionSource: SendableMetatype {
     @MainActor func makeSession(input: Input) -> ConnectionSession<Input, Value>
 }
 
-private protocol RootWritableConnectionSource: ConnectionSource {}
+private protocol RootWritableConnectionSource: ConnectionSource<NoConnectionInput> {}
 
-/// A read-only connection which needs no external input.
-@MainActor public struct Connection<Value>: ConnectionSource {
-    public typealias Input = NoConnectionInput
-
-    let currentValue: @MainActor () -> Value
-
-    let updates: any Publisher<Value, Never>
+/// A read-only connection whose session is created for typed input.
+@MainActor public struct Connection<Input: Equatable, Value>: ConnectionSource {
+    let createSession: @MainActor (Input) -> ConnectionSession<Input, Value>
 
     let identityToken = IdentityToken()
 
     public init(
-        currentValue: @escaping @MainActor () -> Value,
-        updates: any Publisher<Value, Never>
+        createSession: @escaping @MainActor (Input) -> ConnectionSession<Input, Value>
     ) {
-        self.currentValue = currentValue
-        self.updates = updates
+        self.createSession = createSession
     }
 
     public var identity: ObjectIdentifier {
         ObjectIdentifier(identityToken)
     }
 
-    @MainActor public func makeSession(input: NoConnectionInput) -> ConnectionSession<NoConnectionInput, Value> {
-        ConnectionSession(
-            currentValue: currentValue,
-            updates: updates
-        )
+    @MainActor public func makeSession(input: Input) -> ConnectionSession<Input, Value> {
+        createSession(input)
+    }
+}
+
+extension Connection where Input == NoConnectionInput {
+    public init(
+        currentValue: @escaping @MainActor () -> Value,
+        updates: any Publisher<Value, Never>
+    ) {
+        self.init { _ in
+            ConnectionSession(
+                currentValue: currentValue,
+                updates: updates
+            )
+        }
     }
 }
 
@@ -119,28 +124,6 @@ private protocol RootWritableConnectionSource: ConnectionSource {}
 }
 
 extension WritableConnection: RootWritableConnectionSource {}
-
-/// An input-bearing connection recipe. The session it creates owns the resulting
-/// state until the SwiftUI location holding the session disappears.
-public struct ConnectionFactory<Input: Equatable, Value>: ConnectionSource {
-    let identityToken = IdentityToken()
-
-    let createSession: @MainActor (Input) -> ConnectionSession<Input, Value>
-
-    public init(
-        createSession: @escaping @MainActor (Input) -> ConnectionSession<Input, Value>
-    ) {
-        self.createSession = createSession
-    }
-
-    public var identity: ObjectIdentifier {
-        ObjectIdentifier(identityToken)
-    }
-
-    @MainActor public func makeSession(input: Input) -> ConnectionSession<Input, Value> {
-        createSession(input)
-    }
-}
 
 // MARK: - Universal connection lifecycle
 
@@ -246,7 +229,7 @@ extension ConnectionHost where Source: RootWritableConnectionSource {
 public protocol ConnectionKey {
     associatedtype Scope
 
-    associatedtype Source: ConnectionSource where Source.Input == NoConnectionInput
+    associatedtype Source: ConnectionSource<NoConnectionInput>
 
     associatedtype Projection
 
@@ -257,7 +240,7 @@ public protocol ConnectionKey {
 
 /// The SwiftUI-owned location from which a connection key derives its
 /// projected value.
-@MainActor public struct ScopedStateLocation<Source: ConnectionSource> where Source.Input == NoConnectionInput {
+@MainActor public struct ScopedStateLocation<Source: ConnectionSource<NoConnectionInput>> {
     fileprivate let host: Binding<ConnectionHost<Source>>
 
     fileprivate func memberBinding<Member>(
@@ -268,12 +251,12 @@ public protocol ConnectionKey {
 }
 
 public struct ReadOnlyConnectionKey<Scope, Value>: ConnectionKey {
-    public typealias Source = Connection<Value>
+    public typealias Source = Connection<NoConnectionInput, Value>
 
-    public let keyPath: KeyPath<Scope, Connection<Value>>
+    public let keyPath: KeyPath<Scope, Connection<NoConnectionInput, Value>>
 
     @MainActor public func projection(
-        for location: ScopedStateLocation<Connection<Value>>
+        for location: ScopedStateLocation<Connection<NoConnectionInput, Value>>
     ) -> ScopedStateProjection<Value> {
         ScopedStateProjection(location: location)
     }
@@ -292,7 +275,7 @@ public struct WritableConnectionKey<Scope, Value>: ConnectionKey {
 }
 
 @MainActor @dynamicMemberLookup public struct ScopedStateProjection<Value> {
-    fileprivate let location: ScopedStateLocation<Connection<Value>>
+    fileprivate let location: ScopedStateLocation<Connection<NoConnectionInput, Value>>
 
     public subscript<Member>(dynamicMember keyPath: ReferenceWritableKeyPath<Value, Member>) -> Binding<Member> {
         location.memberBinding(keyPath)
@@ -309,7 +292,7 @@ public struct WritableConnectionKey<Scope, Value>: ConnectionKey {
     private let key: Key
 
     public init<Scope, Value>(
-        _ keyPath: KeyPath<Scope, Connection<Value>>
+        _ keyPath: KeyPath<Scope, Connection<NoConnectionInput, Value>>
     ) where Key == ReadOnlyConnectionKey<Scope, Value> {
         self.key = ReadOnlyConnectionKey(keyPath: keyPath)
         self._scope = Environment(ScopedStateStorage<Scope>.self)
