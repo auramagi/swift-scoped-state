@@ -8,8 +8,6 @@
 import Combine
 import SwiftUI
 
-// MARK: - Connection sources and sessions
-
 final class IdentityToken {}
 
 /// A live connection created for one position in the SwiftUI view tree.
