@@ -158,9 +158,9 @@ public struct ConnectionFactory<Input: Equatable, Value>: ConnectionSource {
 @MainActor private final class ConnectionHost<Source: ConnectionSource> {
     let storage = ScopedStateStorage<Source.Value>()
 
-    var connectedValue: Source.Value {
+    var replaceableValue: Source.Value {
         get { storage.requiredValue }
-        set { write(newValue) }
+        set { replace(with: newValue) }
     }
 
     private var sourceIdentity: ObjectIdentifier?
@@ -208,14 +208,25 @@ public struct ConnectionFactory<Input: Equatable, Value>: ConnectionSource {
         storage.receive(session.currentValue())
     }
 
-    private func write(_ value: Source.Value) {
+    private func replace(with value: Source.Value) {
         guard let session else {
             preconditionFailure("Scoped state was written before DynamicProperty.update()")
         }
 
-        // A derived binding to a member of a read-only reference value writes
-        // the unchanged root reference back after mutating the member.
-        session.setValue?(value)
+        guard let setValue = session.setValue else {
+            preconditionFailure("A read-only scoped state value cannot be replaced")
+        }
+
+        setValue(value)
+    }
+
+    subscript<Member>(member keyPath: ReferenceWritableKeyPath<Source.Value, Member>) -> Member {
+        get {
+            storage.requiredValue[keyPath: keyPath]
+        }
+        set {
+            storage.requiredValue[keyPath: keyPath] = newValue
+        }
     }
 }
 
@@ -348,7 +359,19 @@ public protocol ConnectionKey {
 
     var keyPath: KeyPath<Scope, Source> { get }
 
-    @MainActor func projection(for value: Binding<Source.Value>) -> Projection
+    @MainActor func projection(for location: ScopedStateLocation<Source>) -> Projection
+}
+
+/// The SwiftUI-owned location from which a connection key derives its
+/// projected value.
+@MainActor public struct ScopedStateLocation<Source: ConnectionSource> where Source.Input == NoConnectionInput {
+    fileprivate let host: Binding<ConnectionHost<Source>>
+
+    fileprivate func memberBinding<Member>(
+        _ keyPath: ReferenceWritableKeyPath<Source.Value, Member>
+    ) -> Binding<Member> {
+        host[dynamicMember: \ConnectionHost<Source>.[member: keyPath]]
+    }
 }
 
 public struct ReadOnlyConnectionKey<Scope, Value>: ConnectionKey {
@@ -356,8 +379,10 @@ public struct ReadOnlyConnectionKey<Scope, Value>: ConnectionKey {
 
     public let keyPath: KeyPath<Scope, Connection<Value>>
 
-    @MainActor public func projection(for value: Binding<Value>) -> ScopedStateProjection<Value> {
-        ScopedStateProjection(value: value)
+    @MainActor public func projection(
+        for location: ScopedStateLocation<Connection<Value>>
+    ) -> ScopedStateProjection<Value> {
+        ScopedStateProjection(location: location)
     }
 }
 
@@ -366,22 +391,18 @@ public struct WritableConnectionKey<Scope, Value>: ConnectionKey {
 
     public let keyPath: KeyPath<Scope, WritableConnection<Value>>
 
-    @MainActor public func projection(for value: Binding<Value>) -> Binding<Value> {
-        value
+    @MainActor public func projection(
+        for location: ScopedStateLocation<WritableConnection<Value>>
+    ) -> Binding<Value> {
+        location.host.replaceableValue
     }
 }
 
 @MainActor @dynamicMemberLookup public struct ScopedStateProjection<Value> {
-    fileprivate let value: Binding<Value>
+    fileprivate let location: ScopedStateLocation<Connection<Value>>
 
-    public subscript<Member>(dynamicMember keyPath: KeyPath<Value, Member>) -> Member {
-        value.wrappedValue[keyPath: keyPath]
-    }
-}
-
-extension ScopedStateProjection where Value: AnyObject {
     public subscript<Member>(dynamicMember keyPath: ReferenceWritableKeyPath<Value, Member>) -> Binding<Member> {
-        value[dynamicMember: keyPath]
+        location.memberBinding(keyPath)
     }
 }
 
@@ -423,6 +444,6 @@ extension ScopedStateProjection where Value: AnyObject {
 
     public var projectedValue: Key.Projection {
         _ = scope.generation
-        return key.projection(for: $host.connectedValue)
+        return key.projection(for: ScopedStateLocation(host: $host))
     }
 }

@@ -136,6 +136,10 @@ private struct ProductConnectionSemantics: View {
 
     @ScopedState(\ProductScope.options) private var options
 
+    @ScopedState(\ProductScope.optionControls) private var optionControls
+
+    @ScopedState(\ProductScope.replaceableOptions) private var replaceableOptions
+
     var body: some View {
         GroupBox("Connection semantics") {
             VStack(alignment: .leading, spacing: 12) {
@@ -153,6 +157,39 @@ private struct ProductConnectionSemantics: View {
                 Toggle("Gift wrap", isOn: $options.includesGiftWrap)
 
                 Stepper("Quantity: \(options.quantity)", value: $options.quantity, in: 1 ... 10)
+
+                Divider()
+
+                Text("Read-only value with nonmutating properties")
+                    .font(.headline)
+
+                Toggle("Gift wrap", isOn: $optionControls.includesGiftWrap)
+
+                Stepper(
+                    "Quantity: \(optionControls.quantity)",
+                    value: $optionControls.quantity,
+                    in: 1 ... 10
+                )
+
+                Divider()
+
+                Text("Replaceable object reference")
+                    .font(.headline)
+
+                LabeledContent("Instance", value: String(replaceableOptions.id.uuidString.prefix(8)))
+                    .monospaced()
+
+                Toggle("Gift wrap", isOn: $replaceableOptions.includesGiftWrap)
+
+                Stepper(
+                    "Quantity: \(replaceableOptions.quantity)",
+                    value: $replaceableOptions.quantity,
+                    in: 1 ... 10
+                )
+
+                Button("Replace object") {
+                    $replaceableOptions.wrappedValue = ProductOptions()
+                }
             }
             .padding(.vertical, 4)
         }
@@ -319,9 +356,25 @@ struct ProductDetailSnapshot: Equatable {
 }
 
 @MainActor @Observable final class ProductOptions {
+    let id = UUID()
+
     var includesGiftWrap = false
 
     var quantity = 1
+}
+
+@MainActor struct ProductOptionControls {
+    let options: ProductOptions
+
+    var includesGiftWrap: Bool {
+        get { options.includesGiftWrap }
+        nonmutating set { options.includesGiftWrap = newValue }
+    }
+
+    var quantity: Int {
+        get { options.quantity }
+        nonmutating set { options.quantity = newValue }
+    }
 }
 
 @MainActor struct ProductScope {
@@ -334,6 +387,10 @@ struct ProductDetailSnapshot: Equatable {
     let isFavorite: WritableConnection<Bool>
 
     let options: Connection<ProductOptions>
+
+    let optionControls: Connection<ProductOptionControls>
+
+    let replaceableOptions: WritableConnection<ProductOptions>
 }
 
 @MainActor final class ProductDetailContainer {
@@ -353,7 +410,7 @@ struct ProductDetailSnapshot: Equatable {
 
     private let favoriteSubject: CurrentValueSubject<Bool, Never>
 
-    private let options: ProductOptions
+    private let optionsSubject: CurrentValueSubject<ProductOptions, Never>
 
     private let snapshotSubject: CurrentValueSubject<ProductDetailSnapshot, Never>
 
@@ -371,7 +428,7 @@ struct ProductDetailSnapshot: Equatable {
         self.orderSubject = CurrentValueSubject(appContainer.orderState(id: input.productID))
         self.availabilitySubject = CurrentValueSubject(Self.isAvailable(productID: input.productID))
         self.favoriteSubject = CurrentValueSubject(appContainer.isFavorite(id: input.productID))
-        self.options = ProductOptions()
+        self.optionsSubject = CurrentValueSubject(ProductOptions())
         self.snapshotSubject = CurrentValueSubject(
             ProductDetailSnapshot(
                 appContainerID: appContainer.containerID,
@@ -419,8 +476,17 @@ struct ProductDetailSnapshot: Equatable {
                 setValue: { self.setFavorite($0) }
             ),
             options: Connection(
-                currentValue: { self.options },
-                updates: Empty(completeImmediately: false)
+                currentValue: { self.optionsSubject.value },
+                updates: optionsSubject
+            ),
+            optionControls: Connection(
+                currentValue: { ProductOptionControls(options: self.optionsSubject.value) },
+                updates: optionsSubject.map(ProductOptionControls.init)
+            ),
+            replaceableOptions: WritableConnection(
+                currentValue: { self.optionsSubject.value },
+                updates: optionsSubject,
+                setValue: { self.optionsSubject.send($0) }
             )
         )
     }
