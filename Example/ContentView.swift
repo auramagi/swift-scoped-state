@@ -269,11 +269,11 @@ struct ProductDetailSnapshot: Equatable {
 }
 
 @MainActor struct AppScope {
-    let productDetail: Connection<ProductDetailInput, ProductScope>
+    let productDetail: Connection<ProductScope>.Input<ProductDetailInput>
 }
 
 @MainActor struct AppDiagnosticsScope {
-    let containerID: Connection<Void, UUID>
+    let containerID: Connection<UUID>
 }
 
 @MainActor final class AppContainer {
@@ -285,7 +285,7 @@ struct ProductDetailSnapshot: Equatable {
 
     var appScope: AppScope {
         AppScope(
-            productDetail: Connection { input in
+            productDetail: .init { input in
                 let container = ProductDetailContainer(appContainer: self, input: input)
                 let scope = container.scope
                 return ConnectionSession(
@@ -378,19 +378,19 @@ struct ProductDetailSnapshot: Equatable {
 }
 
 @MainActor struct ProductScope {
-    let orderState: WritableConnection<Void, OrderState>
+    let orderState: Connection<OrderState>.Writable
 
-    let snapshot: Connection<Void, ProductDetailSnapshot>
+    let snapshot: Connection<ProductDetailSnapshot>
 
-    let isAvailable: Connection<Void, Bool>
+    let isAvailable: Connection<Bool>
 
-    let isFavorite: WritableConnection<Void, Bool>
+    let isFavorite: Connection<Bool>.Writable
 
-    let options: Connection<Void, ProductOptions>
+    let options: Connection<ProductOptions>
 
-    let optionControls: Connection<Void, ProductOptionControls>
+    let optionControls: Connection<ProductOptionControls>
 
-    let replaceableOptions: WritableConnection<Void, ProductOptions>
+    let replaceableOptions: Connection<ProductOptions>.Writable
 }
 
 @MainActor final class ProductDetailContainer {
@@ -457,33 +457,33 @@ struct ProductDetailSnapshot: Equatable {
 
     var scope: ProductScope {
         ProductScope(
-            orderState: WritableConnection(
+            orderState: .init(
                 currentValue: { self.orderSubject.value },
                 updates: orderSubject,
                 setValue: { self.setOrderState($0) }
             ),
-            snapshot: Connection(
+            snapshot: .init(
                 currentValue: { self.snapshot },
                 updates: snapshotSubject
             ),
-            isAvailable: Connection(
+            isAvailable: .init(
                 currentValue: { self.availabilitySubject.value },
                 updates: availabilitySubject
             ),
-            isFavorite: WritableConnection(
+            isFavorite: .init(
                 currentValue: { self.favoriteSubject.value },
                 updates: favoriteSubject,
                 setValue: { self.setFavorite($0) }
             ),
-            options: Connection(
+            options: .init(
                 currentValue: { self.optionsSubject.value },
                 updates: optionsSubject
             ),
-            optionControls: Connection(
+            optionControls: .init(
                 currentValue: { ProductOptionControls(options: self.optionsSubject.value) },
                 updates: optionsSubject.map(ProductOptionControls.init)
             ),
-            replaceableOptions: WritableConnection(
+            replaceableOptions: .init(
                 currentValue: { self.optionsSubject.value },
                 updates: optionsSubject,
                 setValue: { self.optionsSubject.send($0) }
