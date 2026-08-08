@@ -7,16 +7,16 @@
 
 import Combine
 
-public typealias Connection<WrappedValue> = ConnectionDefinition<Void, ReadOnlyConnectedValue<WrappedValue>>
+public typealias Connection<WrappedValue> = GenericConnection<Void, ReadOnlyConnectedValue<WrappedValue>>
 
 extension Connection {
-    public typealias Configuration<NewConfiguration> = ConnectionDefinition<NewConfiguration, Connected>
+    public typealias Configuration<NewConfiguration> = GenericConnection<NewConfiguration, Connected>
 
-    public typealias Writable = ConnectionDefinition<Configuration, WritableConnectedValue<Connected.WrappedValue>>
+    public typealias Writable = GenericConnection<Configuration, WritableConnectedValue<Connected.WrappedValue>>
 }
 
 /// The generic implementation underlying the public `Connection<Value>` family.
-@MainActor public struct ConnectionDefinition<Configuration, Connected: ConnectedValue> {
+@MainActor public struct GenericConnection<Configuration, Connected: ConnectedValue> {
     /// A live handle created for one position in the SwiftUI view tree.
     /// Its closures retain any implementation object needed to keep the value alive.
     @MainActor public struct Handle {
@@ -65,7 +65,7 @@ extension Connection {
     }
 }
 
-extension ConnectionDefinition where Configuration: Equatable {
+extension GenericConnection where Configuration: Equatable {
     public init(
         makeHandle: @escaping @MainActor (Configuration) -> Handle
     ) {
@@ -76,7 +76,7 @@ extension ConnectionDefinition where Configuration: Equatable {
     }
 }
 
-extension ConnectionDefinition where Configuration == Void {
+extension GenericConnection where Configuration == Void {
     public init(
         makeHandle: @escaping @MainActor () -> Handle
     ) {

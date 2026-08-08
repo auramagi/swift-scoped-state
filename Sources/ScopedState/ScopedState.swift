@@ -9,7 +9,7 @@ import Combine
 import SwiftUI
 
 @MainActor @propertyWrapper public struct ScopedState<Scope, Configuration, Connected: ConnectedValue>: @MainActor DynamicProperty {
-    private typealias Connection = ConnectionDefinition<Configuration, Connected>
+    private typealias Connection = GenericConnection<Configuration, Connected>
 
     @MainActor private final class Coordinator {
         @MainActor struct Session {
@@ -113,7 +113,7 @@ import SwiftUI
     private let configuration: Configuration
 
     public init(
-        _ keyPath: KeyPath<Scope, ConnectionDefinition<Configuration, Connected>>,
+        _ keyPath: KeyPath<Scope, GenericConnection<Configuration, Connected>>,
         configuration: Configuration
     ) {
         self.keyPath = keyPath
@@ -121,7 +121,7 @@ import SwiftUI
     }
 
     public init(
-        _ keyPath: KeyPath<Scope, ConnectionDefinition<Configuration, Connected>>
+        _ keyPath: KeyPath<Scope, GenericConnection<Configuration, Connected>>
     ) where Configuration == Void {
         self.init(keyPath, configuration: ())
     }
