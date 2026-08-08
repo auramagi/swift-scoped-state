@@ -10,76 +10,105 @@ import SwiftUI
 
 @MainActor @propertyWrapper public struct ScopedState<Scope, Configuration, Connected: ConnectedValue>: @MainActor DynamicProperty {
     @MainActor private final class Coordinator {
+        typealias Definition = ConnectionDefinition<Configuration, Connected>
+
+        private struct SourceIdentity: Equatable {
+            let storage: ScopedStateStorage<Scope>
+
+            let generation: UInt
+
+            let keyPath: KeyPath<Scope, Definition>
+
+            static func == (lhs: Self, rhs: Self) -> Bool {
+                lhs.storage === rhs.storage
+                    && lhs.generation == rhs.generation
+                    && lhs.keyPath == rhs.keyPath
+            }
+        }
+
+        private struct ActiveConnection {
+            let source: SourceIdentity
+
+            let definition: Definition
+
+            var configuration: Configuration
+
+            let session: Definition.Session
+
+            var subscription: AnyCancellable?
+        }
+
         let storage = ScopedStateStorage<Connected.WrappedValue>()
 
-        private var definitionIdentity: ObjectIdentifier?
+        private var active: ActiveConnection?
 
-        private var configuration: Configuration?
+        var value: Connected.WrappedValue {
+            get { storage.requiredValue }
+            set {
+                guard let session = active?.session else {
+                    preconditionFailure("Scoped state was written before DynamicProperty.update()")
+                }
 
-        private var session: ConnectionDefinition<Configuration, Connected>.Session?
-
-        private var subscription: AnyCancellable?
-
-        private var setValue: @MainActor (Connected.WrappedValue) -> Void = { _ in
-            preconditionFailure("Scoped state was written before DynamicProperty.update()")
+                if let setValue = session.setValue {
+                    setValue(newValue)
+                } else {
+                    storage.value = newValue
+                }
+            }
         }
 
         func update(
-            definition: ConnectionDefinition<Configuration, Connected>,
+            scopeStorage: ScopedStateStorage<Scope>,
+            keyPath: KeyPath<Scope, Definition>,
             configuration: Configuration
         ) {
-            let definitionIdentity = definition.identity
+            let source = SourceIdentity(
+                storage: scopeStorage,
+                generation: scopeStorage.generation,
+                keyPath: keyPath
+            )
 
-            guard self.definitionIdentity != definitionIdentity else {
-                updateConfigurationIfNeeded(configuration, definition: definition)
+            guard active?.source != source else {
+                updateConfigurationIfNeeded(configuration)
                 return
             }
 
+            let definition = scopeStorage.requiredValue[keyPath: keyPath]
             let session = definition.makeSession(configuration: configuration)
-            subscription?.cancel()
 
-            self.definitionIdentity = definitionIdentity
-            self.configuration = configuration
-            self.session = session
-            if let setValue = session.setValue {
-                self.setValue = setValue
-            } else {
-                let storage = storage
-                self.setValue = { value in
-                    storage.value = value
-                }
-            }
+            active?.subscription?.cancel()
+            active = ActiveConnection(
+                source: source,
+                definition: definition,
+                configuration: configuration,
+                session: session,
+                subscription: nil
+            )
+
             storage.value = session.currentValue()
 
-            subscription = session.updates
+            active?.subscription = session.updates
                 .eraseToAnyPublisher()
                 .receive(on: DispatchQueue.main)
                 .sink { [weak self] value in
-                    guard self?.definitionIdentity == definitionIdentity else {
-                        return
-                    }
+                    guard self?.active?.source == source else { return }
+
                     self?.storage.value = value
                 }
         }
 
-        var value: Connected.WrappedValue {
-            get { storage.requiredValue }
-            set { setValue(newValue) }
-        }
-
-        private func updateConfigurationIfNeeded(
-            _ configuration: Configuration,
-            definition: ConnectionDefinition<Configuration, Connected>
-        ) {
+        private func updateConfigurationIfNeeded(_ configuration: Configuration) {
             guard
-                let previousConfiguration = self.configuration,
-                !definition.configurationsAreEqual(previousConfiguration, configuration),
-                let session
+                let active,
+                !active.definition.configurationsAreEqual(
+                    active.configuration,
+                    configuration
+                )
             else { return }
 
-            self.configuration = configuration
-            session.updateConfiguration(configuration)
-            storage.value = session.currentValue()
+            self.active?.configuration = configuration
+            active.session.updateConfiguration(configuration)
+            storage.value = active.session.currentValue()
         }
     }
 
@@ -92,12 +121,6 @@ import SwiftUI
     private let configuration: Configuration
 
     public init(
-        _ keyPath: KeyPath<Scope, ConnectionDefinition<Configuration, Connected>>
-    ) where Configuration == Void {
-        self.init(keyPath, configuration: ())
-    }
-
-    public init(
         _ keyPath: KeyPath<Scope, ConnectionDefinition<Configuration, Connected>>,
         configuration: Configuration
     ) {
@@ -106,9 +129,16 @@ import SwiftUI
         self.configuration = configuration
     }
 
+    public init(
+        _ keyPath: KeyPath<Scope, ConnectionDefinition<Configuration, Connected>>
+    ) where Configuration == Void {
+        self.init(keyPath, configuration: ())
+    }
+
     public func update() {
         coordinator.update(
-            definition: scope.requiredValue[keyPath: keyPath],
+            scopeStorage: scope,
+            keyPath: keyPath,
             configuration: configuration
         )
     }
@@ -122,8 +152,9 @@ import SwiftUI
     }
 
     public var projectedValue: Connected.Projection {
-        let projection = ScopedStateProjection(base: $coordinator.value)
-        return Connected.transformProjection(projection)
+        Connected.transformProjection(
+            ScopedStateProjection(base: $coordinator.value)
+        )
     }
 }
 

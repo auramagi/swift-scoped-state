@@ -52,13 +52,9 @@ extension Connection {
         }
     }
 
-    private final class IdentityToken { }
-
     private let configurationsEqual: @MainActor (Configuration, Configuration) -> Bool
 
     private let createSession: @MainActor (Configuration) -> Session
-
-    private let identityToken = IdentityToken()
 
     private init(
         configurationsEqual: @escaping @MainActor (Configuration, Configuration) -> Bool,
@@ -66,10 +62,6 @@ extension Connection {
     ) {
         self.configurationsEqual = configurationsEqual
         self.createSession = createSession
-    }
-
-    var identity: ObjectIdentifier {
-        ObjectIdentifier(identityToken)
     }
 
     func configurationsAreEqual(
