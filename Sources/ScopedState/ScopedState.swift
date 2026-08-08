@@ -9,34 +9,33 @@ import Combine
 import SwiftUI
 
 @MainActor @propertyWrapper public struct ScopedState<Scope, Configuration, Connected: ConnectedValue>: @MainActor DynamicProperty {
+    private typealias Connection = ConnectionDefinition<Configuration, Connected>
+
     @MainActor private final class Coordinator {
-
         @MainActor struct Session {
-            typealias Definition = ConnectionDefinition<Configuration, Connected>
-
-            struct Context {
+            struct Context: Equatable {
                 let scopeStorage: ScopedStateStorage<Scope>
 
                 let generation: UInt
 
-                let keyPath: KeyPath<Scope, Definition>
+                let keyPath: KeyPath<Scope, Connection>
 
-                var configuration: Configuration
-
-                func matches(_ other: Self) -> Bool {
-                    scopeStorage === other.scopeStorage
-                    && generation == other.generation
-                    && keyPath == other.keyPath
+                static func == (lhs: Context, rhs: Context) -> Bool {
+                    lhs.scopeStorage === rhs.scopeStorage
+                    && lhs.generation == rhs.generation
+                    && lhs.keyPath == rhs.keyPath
                 }
             }
 
-            var context: Context
+            let context: Context
 
-            let definition: Definition
+            let connection: Connection
 
-            let handle: Definition.Handle
+            let handle: Connection.Handle
 
-            var subscription: AnyCancellable?
+            var configuration: Configuration
+
+            var subscription: AnyCancellable? = nil
         }
 
         let storage = ScopedStateStorage<Connected.WrappedValue>()
@@ -58,21 +57,31 @@ import SwiftUI
             }
         }
 
-        func update(context: Session.Context) {
-            guard session?.context.matches(context) != true else {
-                updateConfigurationIfNeeded(context.configuration)
+        func update(
+            scopeStorage: ScopedStateStorage<Scope>,
+            keyPath: KeyPath<Scope, Connection>,
+            configuration: Configuration
+        ) {
+            let context = Session.Context(
+                scopeStorage: scopeStorage,
+                generation: scopeStorage.generation,
+                keyPath: keyPath
+            )
+
+            guard session?.context != context else {
+                updateConfigurationIfNeeded(configuration)
                 return
             }
 
-            let definition = context.scopeStorage.requiredValue[keyPath: context.keyPath]
-            let handle = definition.makeHandle(context.configuration)
+            let connection = context.scopeStorage.requiredValue[keyPath: context.keyPath]
+            let handle = connection.makeHandle(configuration)
 
             session?.subscription?.cancel()
             session = Session(
                 context: context,
-                definition: definition,
+                connection: connection,
                 handle: handle,
-                subscription: nil
+                configuration: configuration
             )
 
             storage.value = handle.currentValue()
@@ -85,15 +94,11 @@ import SwiftUI
         }
 
         private func updateConfigurationIfNeeded(_ configuration: Configuration) {
-            guard
-                let session,
-                !session.definition.configurationsEqual(
-                    session.context.configuration,
-                    configuration
-                )
-            else { return }
+            guard let session, !session.connection.configurationsEqual(session.configuration, configuration) else {
+                return
+            }
 
-            self.session?.context.configuration = configuration
+            self.session?.configuration = configuration
             session.handle.updateConfiguration(configuration)
             storage.value = session.handle.currentValue()
         }
@@ -103,7 +108,7 @@ import SwiftUI
 
     @Environment(ScopedStateStorage<Scope>.self) private var scope
 
-    private let keyPath: KeyPath<Scope, ConnectionDefinition<Configuration, Connected>>
+    private let keyPath: KeyPath<Scope, Connection>
 
     private let configuration: Configuration
 
@@ -122,14 +127,7 @@ import SwiftUI
     }
 
     public func update() {
-        coordinator.update(
-            context: .init(
-                scopeStorage: scope,
-                generation: scope.generation,
-                keyPath: keyPath,
-                configuration: configuration
-            )
-        )
+        coordinator.update(scopeStorage: scope, keyPath: keyPath, configuration: configuration)
     }
 
     var storage: ScopedStateStorage<Connected.WrappedValue> {
