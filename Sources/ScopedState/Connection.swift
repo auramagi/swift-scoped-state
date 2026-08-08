@@ -6,29 +6,8 @@
 //
 
 import Combine
-import SwiftUI
 
-final class IdentityToken { }
-
-public protocol ConnectedValue {
-    associatedtype WrappedValue
-
-    associatedtype Projection
-
-    @MainActor static func transformProjection(_ projection: ScopedStateProjection<WrappedValue>) -> Projection
-}
-
-public enum ReadOnlyConnectedValue<WrappedValue>: ConnectedValue {
-    @MainActor public static func transformProjection(_ projection: ScopedStateProjection<WrappedValue>) -> ScopedStateProjection<WrappedValue> {
-        projection
-    }
-}
-
-public enum WritableConnectedValue<WrappedValue>: ConnectedValue {
-    @MainActor public static func transformProjection(_ projection: ScopedStateProjection<WrappedValue>) -> Binding<WrappedValue> {
-        projection.base
-    }
-}
+public typealias Connection<Value> = ConnectionDefinition<Void, ReadOnlyConnectedValue<Value>>
 
 /// The generic implementation underlying the public `Connection<Value>` family.
 @MainActor public struct ConnectionDefinition<ConnectionConfiguration, Connected: ConnectedValue> {
@@ -119,8 +98,6 @@ public enum WritableConnectedValue<WrappedValue>: ConnectedValue {
     }
 }
 
-public typealias Connection<Value> = ConnectionDefinition<Void, ReadOnlyConnectedValue<Value>>
-
 extension ConnectionDefinition {
     public init(
         configurationsAreEqual: @escaping @MainActor (ConnectionConfiguration, ConnectionConfiguration) -> Bool,
@@ -180,3 +157,5 @@ extension ConnectionDefinition where ConnectionConfiguration == Void {
         }
     }
 }
+
+final class IdentityToken { }
