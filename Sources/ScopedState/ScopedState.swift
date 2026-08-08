@@ -114,7 +114,7 @@ import SwiftUI
 
     @Environment(ScopedStateStorage<Scope>.self) private var scope
 
-    @State private var coordinator: Coordinator
+    @State private var coordinator = Coordinator()
 
     private let keyPath: KeyPath<Scope, ConnectionDefinition<Configuration, Connected>>
 
@@ -124,7 +124,6 @@ import SwiftUI
         _ keyPath: KeyPath<Scope, ConnectionDefinition<Configuration, Connected>>,
         configuration: Configuration
     ) {
-        self._coordinator = State(initialValue: Coordinator())
         self.keyPath = keyPath
         self.configuration = configuration
     }

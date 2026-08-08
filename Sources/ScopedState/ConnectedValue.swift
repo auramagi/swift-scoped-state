@@ -7,7 +7,7 @@
 
 import SwiftUI
 
-public protocol ConnectedValue {
+public protocol ConnectedValue: SendableMetatype {
     associatedtype WrappedValue
 
     associatedtype Projection
