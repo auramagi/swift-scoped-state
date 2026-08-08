@@ -8,7 +8,7 @@
 import Combine
 import SwiftUI
 
-final class IdentityToken {}
+final class IdentityToken { }
 
 public protocol ConnectedValue {
     associatedtype WrappedValue
@@ -26,7 +26,7 @@ public enum ReadOnlyConnectedValue<WrappedValue>: ConnectedValue {
 
 public enum WritableConnectedValue<WrappedValue>: ConnectedValue {
     @MainActor public static func transformProjection(_ projection: ScopedStateProjection<WrappedValue>) -> Binding<WrappedValue> {
-        projection.binding
+        projection.base
     }
 }
 

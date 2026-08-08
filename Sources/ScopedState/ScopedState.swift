@@ -63,12 +63,8 @@ import SwiftUI
         }
 
         var value: Value.WrappedValue {
-            get {
-                storage.requiredValue
-            }
-            set {
-                setValue(newValue)
-            }
+            get { storage.requiredValue }
+            set { setValue(newValue) }
         }
 
         private func updateConfigurationIfNeeded(
@@ -79,9 +75,7 @@ import SwiftUI
                 let previousConfiguration = self.configuration,
                 !source.configurationsAreEqual(previousConfiguration, configuration),
                 let session
-            else {
-                return
-            }
+            else { return }
 
             self.configuration = configuration
             session.updateConfiguration(configuration)
@@ -98,7 +92,7 @@ import SwiftUI
     private let configuration: Configuration
 
     public init(
-        _ keyPath: KeyPath<Scope, ConnectionDefinition<Void, Value>>
+        _ keyPath: KeyPath<Scope, ConnectionDefinition<Configuration, Value>>
     ) where Configuration == Void {
         self.init(keyPath, configuration: ())
     }
@@ -119,7 +113,7 @@ import SwiftUI
         )
     }
 
-    var valueStorage: ScopedStateStorage<Value.WrappedValue> {
+    var storage: ScopedStateStorage<Value.WrappedValue> {
         coordinator.storage
     }
 
@@ -128,15 +122,15 @@ import SwiftUI
     }
 
     public var projectedValue: Value.Projection {
-        let projection = ScopedStateProjection(binding: $coordinator.value)
+        let projection = ScopedStateProjection(base: $coordinator.value)
         return Value.transformProjection(projection)
     }
 }
 
 @MainActor @dynamicMemberLookup public struct ScopedStateProjection<Value> {
-    let binding: Binding<Value>
+    let base: Binding<Value>
 
     public subscript<Member>(dynamicMember keyPath: ReferenceWritableKeyPath<Value, Member>) -> Binding<Member> {
-        binding[dynamicMember: keyPath]
+        base[dynamicMember: keyPath]
     }
 }

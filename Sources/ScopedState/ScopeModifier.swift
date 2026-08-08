@@ -18,7 +18,8 @@ import SwiftUI
     }
 
     func body(content: Content) -> some View {
-        content.environment(_scope.valueStorage)
+        content
+            .environment(_scope.storage)
     }
 }
 
