@@ -31,7 +31,7 @@ import SwiftUI
 
             let connection: Connection
 
-            let handle: Connection.Handle
+            let channel: Connection.Channel
 
             var configuration: Configuration
 
@@ -45,11 +45,11 @@ import SwiftUI
         var value: Connected.WrappedValue {
             get { storage.requiredValue }
             set {
-                guard let handle = session?.handle else {
+                guard let channel = session?.channel else {
                     preconditionFailure("Scoped state was written before DynamicProperty.update()")
                 }
 
-                if let setValue = handle.setValue {
+                if let setValue = channel.setValue {
                     setValue(newValue)
                 } else {
                     storage.value = newValue
@@ -70,25 +70,25 @@ import SwiftUI
 
             if session?.context != context {
                 let connection = context.scopeStorage.requiredValue[keyPath: context.keyPath]
-                let handle = connection.makeHandle(configuration)
+                let channel = connection.makeChannel(configuration)
 
                 session?.subscription?.cancel()
                 session = Session(
                     context: context,
                     connection: connection,
-                    handle: handle,
+                    channel: channel,
                     configuration: configuration
                 )
-                storage.value = handle.currentValue()
-                session?.subscription = handle.updates
+                storage.value = channel.currentValue()
+                session?.subscription = channel.updates
                     .eraseToAnyPublisher()
                     .receive(on: DispatchQueue.main)
                     .map(Optional.some)
                     .assign(to: \.value, on: storage)
             } else if let session, !session.connection.configurationsEqual(session.configuration, configuration) {
                 self.session?.configuration = configuration
-                session.handle.updateConfiguration(configuration)
-                storage.value = session.handle.currentValue()
+                session.channel.updateConfiguration(configuration)
+                storage.value = session.channel.currentValue()
             }
         }
     }

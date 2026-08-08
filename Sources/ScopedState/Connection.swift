@@ -17,9 +17,10 @@ extension Connection {
 
 /// The generic implementation underlying the public `Connection<Value>` family.
 @MainActor public struct GenericConnection<Configuration, Connected: ConnectedValue> {
-    /// A live handle created for one position in the SwiftUI view tree.
+    /// A configurable current-value channel between scoped state and an
+    /// external implementation.
     /// Its closures retain any implementation object needed to keep the value alive.
-    @MainActor public struct Handle {
+    @MainActor public struct Channel {
         let currentValue: @MainActor () -> Connected.WrappedValue
 
         let updates: any Publisher<Connected.WrappedValue, Never>
@@ -52,25 +53,25 @@ extension Connection {
         }
     }
 
-    let makeHandle: @MainActor (Configuration) -> Handle
+    let makeChannel: @MainActor (Configuration) -> Channel
 
     let configurationsEqual: @MainActor (Configuration, Configuration) -> Bool
 
     public init(
-        makeHandle: @escaping @MainActor (Configuration) -> Handle,
+        makeChannel: @escaping @MainActor (Configuration) -> Channel,
         configurationsEqual: @escaping @MainActor (Configuration, Configuration) -> Bool
     ) {
+        self.makeChannel = makeChannel
         self.configurationsEqual = configurationsEqual
-        self.makeHandle = makeHandle
     }
 }
 
 extension GenericConnection where Configuration: Equatable {
     public init(
-        makeHandle: @escaping @MainActor (Configuration) -> Handle
+        makeChannel: @escaping @MainActor (Configuration) -> Channel
     ) {
         self.init(
-            makeHandle: makeHandle,
+            makeChannel: makeChannel,
             configurationsEqual: { $0 == $1 }
         )
     }
@@ -78,10 +79,10 @@ extension GenericConnection where Configuration: Equatable {
 
 extension GenericConnection where Configuration == Void {
     public init(
-        makeHandle: @escaping @MainActor () -> Handle
+        makeChannel: @escaping @MainActor () -> Channel
     ) {
         self.init(
-            makeHandle: { _ in makeHandle() },
+            makeChannel: { _ in makeChannel() },
             configurationsEqual: { _, _ in true }
         )
     }
@@ -91,7 +92,7 @@ extension GenericConnection where Configuration == Void {
         updates: any Publisher<WrappedValue, Never>
     ) where Connected == ReadOnlyConnectedValue<WrappedValue> {
         self.init {
-            Handle(
+            Channel(
                 currentValue: currentValue,
                 updates: updates
             )
@@ -104,7 +105,7 @@ extension GenericConnection where Configuration == Void {
         setValue: @escaping @MainActor (WrappedValue) -> Void
     ) where Connected == WritableConnectedValue<WrappedValue> {
         self.init {
-            Handle(
+            Channel(
                 currentValue: currentValue,
                 updates: updates,
                 setValue: setValue
