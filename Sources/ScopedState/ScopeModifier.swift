@@ -11,10 +11,10 @@ import SwiftUI
     @ScopedState<ParentScope, Configuration, Connected> private var scope: Connected.WrappedValue
 
     init(
-        connection: KeyPath<ParentScope, ConnectionDefinition<Configuration, Connected>>,
+        keyPath: KeyPath<ParentScope, ConnectionDefinition<Configuration, Connected>>,
         configuration: Configuration
     ) {
-        self._scope = ScopedState(connection, configuration: configuration)
+        self._scope = ScopedState(keyPath, configuration: configuration)
     }
 
     func body(content: Content) -> some View {
@@ -28,17 +28,17 @@ extension View {
     /// live session retains any state or container created by the connection until the
     /// subtree disappears.
     @MainActor public func scope<ParentScope, Connected: ConnectedValue>(
-        _ connection: KeyPath<ParentScope, ConnectionDefinition<Void, Connected>>
+        _ keyPath: KeyPath<ParentScope, ConnectionDefinition<Void, Connected>>
     ) -> some View {
-        scope(connection, configuration: ())
+        scope(keyPath, configuration: ())
     }
 
     /// Connects a configured scope at this point in the SwiftUI view tree. The live session
     /// retains any state or container created by the connection until the subtree disappears.
     @MainActor public func scope<ParentScope, Configuration, Connected: ConnectedValue>(
-        _ connection: KeyPath<ParentScope, ConnectionDefinition<Configuration, Connected>>,
+        _ keyPath: KeyPath<ParentScope, ConnectionDefinition<Configuration, Connected>>,
         configuration: Configuration
     ) -> some View {
-        modifier(ScopeModifier(connection: connection, configuration: configuration))
+        modifier(ScopeModifier(keyPath: keyPath, configuration: configuration))
     }
 }
