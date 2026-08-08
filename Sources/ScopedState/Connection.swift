@@ -17,9 +17,9 @@ extension Connection {
 
 /// The generic implementation underlying the public `Connection<Value>` family.
 @MainActor public struct ConnectionDefinition<Configuration, Connected: ConnectedValue> {
-    /// A live connection created for one position in the SwiftUI view tree.
+    /// A live handle created for one position in the SwiftUI view tree.
     /// Its closures retain any implementation object needed to keep the value alive.
-    @MainActor public struct Session {
+    @MainActor public struct Handle {
         let currentValue: @MainActor () -> Connected.WrappedValue
 
         let updates: any Publisher<Connected.WrappedValue, Never>
@@ -52,60 +52,37 @@ extension Connection {
         }
     }
 
-    private let configurationsEqual: @MainActor (Configuration, Configuration) -> Bool
+    let makeHandle: @MainActor (Configuration) -> Handle
 
-    private let createSession: @MainActor (Configuration) -> Session
+    let configurationsEqual: @MainActor (Configuration, Configuration) -> Bool
 
-    private init(
-        configurationsEqual: @escaping @MainActor (Configuration, Configuration) -> Bool,
-        createSession: @escaping @MainActor (Configuration) -> Session
+    public init(
+        makeHandle: @escaping @MainActor (Configuration) -> Handle,
+        configurationsEqual: @escaping @MainActor (Configuration, Configuration) -> Bool
     ) {
         self.configurationsEqual = configurationsEqual
-        self.createSession = createSession
-    }
-
-    func configurationsAreEqual(
-        _ lhs: Configuration,
-        _ rhs: Configuration
-    ) -> Bool {
-        configurationsEqual(lhs, rhs)
-    }
-
-    func makeSession(configuration: Configuration) -> Session {
-        createSession(configuration)
-    }
-}
-
-extension ConnectionDefinition {
-    public init(
-        configurationsAreEqual: @escaping @MainActor (Configuration, Configuration) -> Bool,
-        createSession: @escaping @MainActor (Configuration) -> Session
-    ) {
-        self.init(
-            configurationsEqual: configurationsAreEqual,
-            createSession: createSession
-        )
+        self.makeHandle = makeHandle
     }
 }
 
 extension ConnectionDefinition where Configuration: Equatable {
     public init(
-        createSession: @escaping @MainActor (Configuration) -> Session
+        makeHandle: @escaping @MainActor (Configuration) -> Handle
     ) {
         self.init(
-            configurationsAreEqual: { $0 == $1 },
-            createSession: createSession
+            makeHandle: makeHandle,
+            configurationsEqual: { $0 == $1 }
         )
     }
 }
 
 extension ConnectionDefinition where Configuration == Void {
     public init(
-        createSession: @escaping @MainActor () -> Session
+        makeHandle: @escaping @MainActor () -> Handle
     ) {
         self.init(
-            configurationsAreEqual: { _, _ in true },
-            createSession: { _ in createSession() }
+            makeHandle: { _ in makeHandle() },
+            configurationsEqual: { _, _ in true }
         )
     }
 
@@ -114,7 +91,7 @@ extension ConnectionDefinition where Configuration == Void {
         updates: any Publisher<WrappedValue, Never>
     ) where Connected == ReadOnlyConnectedValue<WrappedValue> {
         self.init {
-            Session(
+            Handle(
                 currentValue: currentValue,
                 updates: updates
             )
@@ -127,7 +104,7 @@ extension ConnectionDefinition where Configuration == Void {
         setValue: @escaping @MainActor (WrappedValue) -> Void
     ) where Connected == WritableConnectedValue<WrappedValue> {
         self.init {
-            Session(
+            Handle(
                 currentValue: currentValue,
                 updates: updates,
                 setValue: setValue

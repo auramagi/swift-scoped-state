@@ -10,46 +10,47 @@ import SwiftUI
 
 @MainActor @propertyWrapper public struct ScopedState<Scope, Configuration, Connected: ConnectedValue>: @MainActor DynamicProperty {
     @MainActor private final class Coordinator {
-        typealias Definition = ConnectionDefinition<Configuration, Connected>
 
-        private struct SourceIdentity: Equatable {
-            let storage: ScopedStateStorage<Scope>
+        @MainActor struct Session {
+            typealias Definition = ConnectionDefinition<Configuration, Connected>
 
-            let generation: UInt
+            struct Context {
+                let scopeStorage: ScopedStateStorage<Scope>
 
-            let keyPath: KeyPath<Scope, Definition>
+                let generation: UInt
 
-            static func == (lhs: Self, rhs: Self) -> Bool {
-                lhs.storage === rhs.storage
-                    && lhs.generation == rhs.generation
-                    && lhs.keyPath == rhs.keyPath
+                let keyPath: KeyPath<Scope, Definition>
+
+                var configuration: Configuration
+
+                func matches(_ other: Self) -> Bool {
+                    scopeStorage === other.scopeStorage
+                    && generation == other.generation
+                    && keyPath == other.keyPath
+                }
             }
-        }
 
-        private struct ActiveConnection {
-            let source: SourceIdentity
+            var context: Context
 
             let definition: Definition
 
-            var configuration: Configuration
-
-            let session: Definition.Session
+            let handle: Definition.Handle
 
             var subscription: AnyCancellable?
         }
 
         let storage = ScopedStateStorage<Connected.WrappedValue>()
 
-        private var active: ActiveConnection?
+        private var session: Session?
 
         var value: Connected.WrappedValue {
             get { storage.requiredValue }
             set {
-                guard let session = active?.session else {
+                guard let handle = session?.handle else {
                     preconditionFailure("Scoped state was written before DynamicProperty.update()")
                 }
 
-                if let setValue = session.setValue {
+                if let setValue = handle.setValue {
                     setValue(newValue)
                 } else {
                     storage.value = newValue
@@ -57,64 +58,50 @@ import SwiftUI
             }
         }
 
-        func update(
-            scopeStorage: ScopedStateStorage<Scope>,
-            keyPath: KeyPath<Scope, Definition>,
-            configuration: Configuration
-        ) {
-            let source = SourceIdentity(
-                storage: scopeStorage,
-                generation: scopeStorage.generation,
-                keyPath: keyPath
-            )
-
-            guard active?.source != source else {
-                updateConfigurationIfNeeded(configuration)
+        func update(context: Session.Context) {
+            guard session?.context.matches(context) != true else {
+                updateConfigurationIfNeeded(context.configuration)
                 return
             }
 
-            let definition = scopeStorage.requiredValue[keyPath: keyPath]
-            let session = definition.makeSession(configuration: configuration)
+            let definition = context.scopeStorage.requiredValue[keyPath: context.keyPath]
+            let handle = definition.makeHandle(context.configuration)
 
-            active?.subscription?.cancel()
-            active = ActiveConnection(
-                source: source,
+            session?.subscription?.cancel()
+            session = Session(
+                context: context,
                 definition: definition,
-                configuration: configuration,
-                session: session,
+                handle: handle,
                 subscription: nil
             )
 
-            storage.value = session.currentValue()
+            storage.value = handle.currentValue()
 
-            active?.subscription = session.updates
+            session?.subscription = handle.updates
                 .eraseToAnyPublisher()
                 .receive(on: DispatchQueue.main)
-                .sink { [weak self] value in
-                    guard self?.active?.source == source else { return }
-
-                    self?.storage.value = value
-                }
+                .map(Optional.some)
+                .assign(to: \.value, on: storage)
         }
 
         private func updateConfigurationIfNeeded(_ configuration: Configuration) {
             guard
-                let active,
-                !active.definition.configurationsAreEqual(
-                    active.configuration,
+                let session,
+                !session.definition.configurationsEqual(
+                    session.context.configuration,
                     configuration
                 )
             else { return }
 
-            self.active?.configuration = configuration
-            active.session.updateConfiguration(configuration)
-            storage.value = active.session.currentValue()
+            self.session?.context.configuration = configuration
+            session.handle.updateConfiguration(configuration)
+            storage.value = session.handle.currentValue()
         }
     }
 
-    @Environment(ScopedStateStorage<Scope>.self) private var scope
-
     @State private var coordinator = Coordinator()
+
+    @Environment(ScopedStateStorage<Scope>.self) private var scope
 
     private let keyPath: KeyPath<Scope, ConnectionDefinition<Configuration, Connected>>
 
@@ -136,9 +123,12 @@ import SwiftUI
 
     public func update() {
         coordinator.update(
-            scopeStorage: scope,
-            keyPath: keyPath,
-            configuration: configuration
+            context: .init(
+                scopeStorage: scope,
+                generation: scope.generation,
+                keyPath: keyPath,
+                configuration: configuration
+            )
         )
     }
 
