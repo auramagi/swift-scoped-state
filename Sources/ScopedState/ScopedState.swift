@@ -68,39 +68,28 @@ import SwiftUI
                 keyPath: keyPath
             )
 
-            guard session?.context != context else {
-                updateConfigurationIfNeeded(configuration)
-                return
+            if session?.context != context {
+                let connection = context.scopeStorage.requiredValue[keyPath: context.keyPath]
+                let handle = connection.makeHandle(configuration)
+
+                session?.subscription?.cancel()
+                session = Session(
+                    context: context,
+                    connection: connection,
+                    handle: handle,
+                    configuration: configuration
+                )
+                storage.value = handle.currentValue()
+                session?.subscription = handle.updates
+                    .eraseToAnyPublisher()
+                    .receive(on: DispatchQueue.main)
+                    .map(Optional.some)
+                    .assign(to: \.value, on: storage)
+            } else if let session, !session.connection.configurationsEqual(session.configuration, configuration) {
+                self.session?.configuration = configuration
+                session.handle.updateConfiguration(configuration)
+                storage.value = session.handle.currentValue()
             }
-
-            let connection = context.scopeStorage.requiredValue[keyPath: context.keyPath]
-            let handle = connection.makeHandle(configuration)
-
-            session?.subscription?.cancel()
-            session = Session(
-                context: context,
-                connection: connection,
-                handle: handle,
-                configuration: configuration
-            )
-
-            storage.value = handle.currentValue()
-
-            session?.subscription = handle.updates
-                .eraseToAnyPublisher()
-                .receive(on: DispatchQueue.main)
-                .map(Optional.some)
-                .assign(to: \.value, on: storage)
-        }
-
-        private func updateConfigurationIfNeeded(_ configuration: Configuration) {
-            guard let session, !session.connection.configurationsEqual(session.configuration, configuration) else {
-                return
-            }
-
-            self.session?.configuration = configuration
-            session.handle.updateConfiguration(configuration)
-            storage.value = session.handle.currentValue()
         }
     }
 
