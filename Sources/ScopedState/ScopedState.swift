@@ -34,7 +34,7 @@ import SwiftUI
 
             var configuration: Configuration
 
-            var cancelObservation: Connection.Channel.Cancel
+            var cancellationToken: Connection.Channel.CancellationToken
         }
 
         let storage = ScopedStateStorage<Connected.WrappedValue>()
@@ -71,32 +71,27 @@ import SwiftUI
                 let connection = context.scopeStorage.requiredValue[keyPath: context.keyPath]
                 let channel = connection.makeChannel(configuration)
 
-                session?.cancelObservation()
-                let cancelObservation = channel.observe { [storage] value in
-                    storage.value = value
-                }
+                session?.cancellationToken.cancel()
                 session = Session(
                     context: context,
                     connection: connection,
                     channel: channel,
                     configuration: configuration,
-                    cancelObservation: cancelObservation
+                    cancellationToken: channel.observe { [storage] value in
+                        storage.value = value
+                    }
                 )
                 storage.value = channel.currentValue()
             } else if let session, !session.connection.configurationsEqual(session.configuration, configuration) {
-                session.cancelObservation()
+                session.cancellationToken.cancel()
                 session.channel.updateConfiguration(configuration)
-                let cancelObservation = session.channel.observe { [storage] value in
-                    storage.value = value
-                }
                 self.session?.configuration = configuration
-                self.session?.cancelObservation = cancelObservation
+                self.session?.cancellationToken = session.channel
+                    .observe { [storage] value in
+                        storage.value = value
+                    }
                 storage.value = session.channel.currentValue()
             }
-        }
-
-        isolated deinit {
-            session?.cancelObservation()
         }
     }
 

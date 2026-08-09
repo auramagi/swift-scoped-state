@@ -21,13 +21,31 @@ extension Connection {
     @MainActor public struct Channel {
         public typealias ReceiveValue = @MainActor (Connected.WrappedValue) -> Void
 
-        public typealias Cancel = () -> Void
+        final class CancellationToken {
+            private var cancellation: (() -> Void)?
+
+            init(_ cancellation: @escaping () -> Void) {
+                self.cancellation = cancellation
+            }
+
+            func cancel() {
+                guard let cancellation else {
+                    return
+                }
+                self.cancellation = nil
+                cancellation()
+            }
+
+            deinit {
+                cancel()
+            }
+        }
 
         let currentValue: @MainActor () -> Connected.WrappedValue
 
         let setValue: (@MainActor (Connected.WrappedValue) -> Void)?
 
-        let observe: @MainActor (@escaping ReceiveValue) -> Cancel
+        let observe: @MainActor (@escaping ReceiveValue) -> CancellationToken
 
         let updateConfiguration: @MainActor (Configuration) -> Void
 
@@ -41,7 +59,7 @@ extension Connection {
             self.setValue = nil
             self.observe = { receiveValue in
                 let observation = observe(receiveValue)
-                return { cancel(observation) }
+                return CancellationToken { cancel(observation) }
             }
             self.updateConfiguration = updateConfiguration
         }
@@ -57,7 +75,7 @@ extension Connection {
             self.setValue = setValue
             self.observe = { receiveValue in
                 let observation = observe(receiveValue)
-                return { cancel(observation) }
+                return CancellationToken { cancel(observation) }
             }
             self.updateConfiguration = updateConfiguration
         }
