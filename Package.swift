@@ -19,5 +19,9 @@ let package = Package(
     ],
     targets: [
         .target(name: "ScopedState"),
+        .testTarget(
+            name: "ScopedStateTests",
+            dependencies: ["ScopedState"]
+        ),
     ]
 )
