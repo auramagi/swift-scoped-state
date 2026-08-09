@@ -123,15 +123,16 @@ import Testing
             },
             cancel: { _ in cancellationCount += 1 }
         )
-        let writable = Connection<Int>.Writable(
+        let writable = Connection<Int>(
             currentValue: { currentValue },
-            setValue: { writtenValues.append($0) },
             observe: { _ in
                 observationCount += 1
                 return observationCount
             },
             cancel: { _ in cancellationCount += 1 }
-        )
+        ).set {
+            writtenValues.append($0)
+        }
 
         let readOnlySession = readOnly.makeSession(())
         let writableSession = writable.makeSession(())
@@ -165,6 +166,43 @@ import Testing
         readOnlySession.deactivate()
         writableSession.deactivate()
         #expect(cancellationCount == 2)
+    }
+
+    @Test
+    func mapTransformsLifecycleValuesAndPreservesConfigurationSemantics() {
+        typealias SourceConnection = Connection<Int>.Configuration<String>
+
+        var deactivationCount = 0
+        let source = SourceConnection(
+            makeSession: { configuration in
+                SourceConnection.Session { yield in
+                    yield(configuration.count)
+                } update: { yield in
+                    yield(2)
+                } reconfigure: { configuration, yield in
+                    yield(configuration.count)
+                } deactivate: {
+                    deactivationCount += 1
+                }
+            },
+            configurationsEqual: { $0.lowercased() == $1.lowercased() }
+        )
+        let mapped = source.map { "value=\($0)" }
+        let session = mapped.makeSession("initial")
+
+        #expect(mapped.configurationsEqual("VALUE", "value"))
+
+        var receivedValues: [String] = []
+        let yield: Connection<String>.Configuration<String>.Session.YieldValue = {
+            receivedValues.append($0)
+        }
+        session.activate(yield)
+        session.update(yield)
+        session.reconfigure("updated", yield)
+        session.deactivate()
+
+        #expect(receivedValues == ["value=7", "value=2", "value=7"])
+        #expect(deactivationCount == 1)
     }
 
     @Test

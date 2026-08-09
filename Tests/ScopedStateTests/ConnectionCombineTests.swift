@@ -32,7 +32,7 @@ import Testing
     }
 
     @Test
-    func writableSubjectUsesSubjectSendByDefault() {
+    func writableSubjectInfersSubjectSend() {
         let subject = CurrentValueSubject<Int, Never>(1)
         let connection: Connection<Int>.Writable = .subject(subject)
         let session = connection.makeSession(())
@@ -50,13 +50,12 @@ import Testing
     }
 
     @Test
-    func writableSubjectCanOverrideItsSetter() {
+    func subjectCanUseACustomSetter() {
         let subject = CurrentValueSubject<Int, Never>(1)
         var writtenValues: [Int] = []
-        let connection: Connection<Int>.Writable = .subject(
-            subject,
-            set: { writtenValues.append($0) }
-        )
+        let connection: Connection<Int>.Writable = .subject(subject).set {
+            writtenValues.append($0)
+        }
         let session = connection.makeSession(())
 
         let setValue = session.setValue
@@ -75,10 +74,9 @@ import Testing
     @Test
     func mappedSubjectMapsCurrentAndSubsequentValues() {
         let subject = CurrentValueSubject<Int, Never>(2)
-        let connection: Connection<String> = .subject(
-            subject,
-            map: { "value=\($0)" }
-        )
+        let connection: Connection<String> = .subject(subject).map {
+            "value=\($0)"
+        }
         let session = connection.makeSession(())
 
         var receivedValues: [String] = []
@@ -92,11 +90,9 @@ import Testing
     func mappedWritableSubjectForwardsMappedWritesToCustomSetter() {
         let subject = CurrentValueSubject<Int, Never>(2)
         var writtenValues: [String] = []
-        let connection: Connection<String>.Writable = .subject(
-            subject,
-            map: { "value=\($0)" },
-            set: { writtenValues.append($0) }
-        )
+        let connection: Connection<String>.Writable = .subject(subject)
+            .map { "value=\($0)" }
+            .set { writtenValues.append($0) }
         let session = connection.makeSession(())
 
         let setValue = session.setValue
@@ -140,9 +136,10 @@ import Testing
         var writtenValues: [Int] = []
         let connection: Connection<Int>.Writable = .publisher(
             publisher,
-            initialValue: 1,
-            set: { writtenValues.append($0) }
-        )
+            initialValue: 1
+        ).set {
+            writtenValues.append($0)
+        }
         let session = connection.makeSession(())
 
         let setValue = session.setValue
@@ -189,9 +186,10 @@ import Testing
         var writtenValues: [Int] = []
         let connection: Connection<Int>.Writable = .publisher(
             publisher,
-            currentValue: { 1 },
-            set: { writtenValues.append($0) }
-        )
+            currentValue: { 1 }
+        ).set {
+            writtenValues.append($0)
+        }
         let session = connection.makeSession(())
 
         let setValue = session.setValue

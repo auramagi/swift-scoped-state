@@ -10,8 +10,7 @@ private extension GenericConnection.Session {
         currentValue: @escaping @MainActor () -> Connected.WrappedValue,
         observe: @escaping @MainActor (@escaping YieldValue) -> Observation,
         cancel: @escaping (Observation) -> Void,
-        reconfigure: @escaping @MainActor (Configuration) -> Void,
-        setValue: SetValue?
+        reconfigure: @escaping @MainActor (Configuration) -> Void
     ) -> Self {
         var cancellationToken: CancellationToken?
 
@@ -40,7 +39,7 @@ private extension GenericConnection.Session {
             deactivate: {
                 cancelObservation()
             },
-            setValue: setValue
+            setValue: nil
         )
     }
 }
@@ -56,24 +55,7 @@ extension GenericConnection.Session {
             currentValue: currentValue,
             observe: observe,
             cancel: cancel,
-            reconfigure: reconfigure,
-            setValue: nil
-        )
-    }
-
-    public init<WrappedValue, Observation>(
-        currentValue: @escaping @MainActor () -> WrappedValue,
-        setValue: @escaping @MainActor (WrappedValue) -> Void,
-        observe: @escaping @MainActor (@escaping YieldValue) -> Observation,
-        cancel: @escaping (Observation) -> Void,
-        reconfigure: @escaping @MainActor (Configuration) -> Void
-    ) where Connected == WritableConnectedValue<WrappedValue> {
-        self = Self.observing(
-            currentValue: currentValue,
-            observe: observe,
-            cancel: cancel,
-            reconfigure: reconfigure,
-            setValue: setValue
+            reconfigure: reconfigure
         )
     }
 }
@@ -91,19 +73,63 @@ extension GenericConnection.Session where Configuration == Void {
             reconfigure: { _ in }
         )
     }
+}
 
-    public init<WrappedValue, Observation>(
-        currentValue: @escaping @MainActor () -> WrappedValue,
-        setValue: @escaping @MainActor (WrappedValue) -> Void,
-        observe: @escaping @MainActor (@escaping YieldValue) -> Observation,
-        cancel: @escaping (Observation) -> Void
-    ) where Connected == WritableConnectedValue<WrappedValue> {
-        self.init(
-            currentValue: currentValue,
-            setValue: setValue,
-            observe: observe,
-            cancel: cancel,
-            reconfigure: { _ in }
+extension GenericConnection {
+    /// Transforms every value delivered by this connection while preserving
+    /// its configuration and lifecycle behavior.
+    public func map<WrappedValue, MappedValue>(
+        _ transform: @escaping @MainActor (WrappedValue) -> MappedValue
+    ) -> GenericConnection<Configuration, ReadOnlyConnectedValue<MappedValue>> where Connected == ReadOnlyConnectedValue<WrappedValue> {
+        typealias MappedConnection = GenericConnection<Configuration, ReadOnlyConnectedValue<MappedValue>>
+
+        return MappedConnection(
+            makeSession: { configuration in
+                let session = makeSession(configuration)
+
+                func transformYield(
+                    _ yield: @escaping MappedConnection.Session.YieldValue
+                ) -> Session.YieldValue {
+                    { value in
+                        yield(transform(value))
+                    }
+                }
+
+                return MappedConnection.Session(
+                    activate: { yield in
+                        session.activate(transformYield(yield))
+                    },
+                    update: { yield in
+                        session.update(transformYield(yield))
+                    },
+                    reconfigure: { configuration, yield in
+                        session.reconfigure(configuration, transformYield(yield))
+                    },
+                    deactivate: session.deactivate
+                )
+            },
+            configurationsEqual: configurationsEqual
+        )
+    }
+
+    /// Adds a write operation to a read-only connection.
+    public func set<WrappedValue>(
+        _ setValue: @escaping @MainActor (WrappedValue) -> Void
+    ) -> GenericConnection<Configuration, WritableConnectedValue<WrappedValue>> where Connected == ReadOnlyConnectedValue<WrappedValue> {
+        typealias WritableConnection = GenericConnection<Configuration, WritableConnectedValue<WrappedValue>>
+
+        return WritableConnection(
+            makeSession: { configuration in
+                let session = makeSession(configuration)
+                return WritableConnection.Session(
+                    activate: session.activate,
+                    update: session.update,
+                    reconfigure: session.reconfigure,
+                    deactivate: session.deactivate,
+                    setValue: setValue
+                )
+            },
+            configurationsEqual: configurationsEqual
         )
     }
 }
@@ -125,24 +151,6 @@ extension GenericConnection where Configuration == Void {
         }
     }
 
-    /// Creates an unconfigured writable connection whose operations' capture-list
-    /// state is recreated for every session.
-    public init<WrappedValue>(
-        activate: @autoclosure @escaping @MainActor () -> Session.Activate,
-        update: @autoclosure @escaping @MainActor () -> Session.Update = ({ (_: @escaping Session.YieldValue) in } as Session.Update),
-        deactivate: @autoclosure @escaping @MainActor () -> Session.Deactivate = ({} as Session.Deactivate),
-        setValue: @autoclosure @escaping @MainActor () -> Session.SetValue
-    ) where Connected == WritableConnectedValue<WrappedValue> {
-        self.init {
-            Session(
-                activate: activate(),
-                update: update(),
-                deactivate: deactivate(),
-                setValue: setValue()
-            )
-        }
-    }
-
     public init<WrappedValue, Observation>(
         currentValue: @escaping @MainActor () -> WrappedValue,
         observe: @escaping @MainActor (@escaping Session.YieldValue) -> Observation,
@@ -157,27 +165,11 @@ extension GenericConnection where Configuration == Void {
         }
     }
 
-    public init<WrappedValue, Observation>(
-        currentValue: @escaping @MainActor () -> WrappedValue,
-        setValue: @escaping @MainActor (WrappedValue) -> Void,
-        observe: @escaping @MainActor (@escaping Session.YieldValue) -> Observation,
-        cancel: @escaping (Observation) -> Void
-    ) where Connected == WritableConnectedValue<WrappedValue> {
-        self.init {
-            Session(
-                currentValue: currentValue,
-                setValue: setValue,
-                observe: observe,
-                cancel: cancel
-            )
-        }
-    }
-
     /// Creates a read-only connection that always provides the same value.
     public static func constant<WrappedValue>(
         _ value: WrappedValue
-    ) -> Self where Connected == ReadOnlyConnectedValue<WrappedValue> {
-        Self { yield in
+    ) -> Connection<WrappedValue> {
+        Connection<WrappedValue> { yield in
             yield(value)
         }
     }

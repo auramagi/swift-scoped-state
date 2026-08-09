@@ -13,9 +13,9 @@ import Testing
     @Test
     func unconfiguredConnectionCanDefineItsSessionInline() {
         var writtenValues: [Int] = []
-        let connection = Connection<Int>.Writable { yield in
+        let connection = Connection<Int> { yield in
             yield(1)
-        } setValue: {
+        }.set {
             writtenValues.append($0)
         }
         let session = connection.makeSession(())
@@ -52,31 +52,19 @@ import Testing
     }
 
     @Test
-    func inlineWritableOperationStateIsIndependentBetweenSessions() {
-        final class Counter {
-            var value = 0
-        }
-
-        var counters: [Counter] = []
-        func makeCounter() -> Counter {
-            let counter = Counter()
-            counters.append(counter)
-            return counter
-        }
-
-        let connection = Connection<Int>.Writable { _ in
-        } setValue: { [counter = makeCounter()] value in
-            counter.value += value
+    func writeRoutingIsAvailableToEverySession() {
+        var writtenValues: [Int] = []
+        let connection = Connection<Int> { _ in
+        }.set {
+            writtenValues.append($0)
         }
         let firstSession = connection.makeSession(())
         let secondSession = connection.makeSession(())
 
         firstSession.setValue?(1)
-        firstSession.setValue?(1)
-        secondSession.setValue?(1)
+        secondSession.setValue?(2)
 
-        #expect(counters.count == 2)
-        #expect(counters.map(\.value) == [2, 1])
+        #expect(writtenValues == [1, 2])
     }
 
     @Test
@@ -96,5 +84,21 @@ import Testing
         #expect(receivedValues == [42])
 
         session.deactivate()
+    }
+
+    @Test
+    func constantCanComposeMappingAndWriteRouting() {
+        var writtenValues: [String] = []
+        let connection: Connection<String>.Writable = .constant(42)
+            .map(String.init)
+            .set { writtenValues.append($0) }
+        let session = connection.makeSession(())
+
+        var receivedValues: [String] = []
+        session.activate { receivedValues.append($0) }
+        session.setValue?("replacement")
+
+        #expect(receivedValues == ["42"])
+        #expect(writtenValues == ["replacement"])
     }
 }

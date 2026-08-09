@@ -54,15 +54,14 @@ import UIKit
     }
 
     var writableConnection: Connection<Value>.Writable {
-        Connection<Value>.Writable(
+        Connection(
             currentValue: { self.value },
-            setValue: {
-                self.writtenValues.append($0)
-                self.send($0)
-            },
             observe: { self.observe($0) },
             cancel: { self.cancel($0) }
-        )
+        ).set {
+            self.writtenValues.append($0)
+            self.send($0)
+        }
     }
 
     var unobservedConnection: Connection<Value> {

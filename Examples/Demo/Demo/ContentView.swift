@@ -456,12 +456,12 @@ struct ProductDetailSnapshot: Equatable {
 
     var scope: ProductScope {
         ProductScope(
-            orderState: .subject(orderSubject, set: setOrderState),
+            orderState: .subject(orderSubject).set(setOrderState),
             snapshot: .subject(snapshotSubject),
             isAvailable: .subject(availabilitySubject),
-            isFavorite: .subject(favoriteSubject, set: setFavorite),
+            isFavorite: .subject(favoriteSubject).set(setFavorite),
             options: .subject(optionsSubject),
-            optionControls: .subject(optionsSubject, map: ProductOptionControls.init),
+            optionControls: .subject(optionsSubject).map(ProductOptionControls.init),
             replaceableOptions: .subject(optionsSubject)
         )
     }

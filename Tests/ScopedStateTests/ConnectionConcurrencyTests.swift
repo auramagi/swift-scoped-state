@@ -51,19 +51,18 @@ import Testing
         let currentValue = CurrentValue()
         let connection: Connection<String> = .async(
             updates,
-            currentValue: { "current=\(currentValue.value)" },
-            map: { "update=\($0)" }
-        )
+            currentValue: { currentValue.value }
+        ).map { "value=\($0)" }
         let session = connection.makeSession(())
         let (receivedValues, receivedValuesContinuation) = AsyncStream.makeStream(of: String.self)
         var receivedValuesIterator = receivedValues.makeAsyncIterator()
 
         currentValue.value = 2
         session.activate { receivedValuesContinuation.yield($0) }
-        #expect(await receivedValuesIterator.next() == "current=2")
+        #expect(await receivedValuesIterator.next() == "value=2")
 
         updatesContinuation.yield(3)
-        #expect(await receivedValuesIterator.next() == "update=3")
+        #expect(await receivedValuesIterator.next() == "value=3")
         session.deactivate()
     }
 
@@ -74,9 +73,10 @@ import Testing
         var writtenValues: [Int] = []
         let connection: Connection<Int>.Writable = .async(
             updates,
-            initialValue: 1,
-            set: { writtenValues.append($0) }
-        )
+            initialValue: 1
+        ).set {
+            writtenValues.append($0)
+        }
         let session = connection.makeSession(())
         let (receivedValues, receivedValuesContinuation) = AsyncStream.makeStream(of: Int.self)
         var receivedValuesIterator = receivedValues.makeAsyncIterator()
