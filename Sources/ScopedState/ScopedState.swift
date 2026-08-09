@@ -5,7 +5,6 @@
 //  Created by Mikhail Apurin on 2026-08-07.
 //
 
-import Combine
 import SwiftUI
 
 @MainActor @propertyWrapper public struct ScopedState<Scope, Configuration, Connected: ConnectedValue>: @MainActor DynamicProperty {
@@ -35,7 +34,7 @@ import SwiftUI
 
             var configuration: Configuration
 
-            var subscription: AnyCancellable? = nil
+            var cancelObservation: Connection.Channel.Cancel
         }
 
         let storage = ScopedStateStorage<Connected.WrappedValue>()
@@ -72,24 +71,32 @@ import SwiftUI
                 let connection = context.scopeStorage.requiredValue[keyPath: context.keyPath]
                 let channel = connection.makeChannel(configuration)
 
-                session?.subscription?.cancel()
+                session?.cancelObservation()
+                let cancelObservation = channel.observe { [storage] value in
+                    storage.value = value
+                }
                 session = Session(
                     context: context,
                     connection: connection,
                     channel: channel,
-                    configuration: configuration
+                    configuration: configuration,
+                    cancelObservation: cancelObservation
                 )
                 storage.value = channel.currentValue()
-                session?.subscription = channel.updates
-                    .eraseToAnyPublisher()
-                    .receive(on: DispatchQueue.main)
-                    .map(Optional.some)
-                    .assign(to: \.value, on: storage)
             } else if let session, !session.connection.configurationsEqual(session.configuration, configuration) {
-                self.session?.configuration = configuration
+                session.cancelObservation()
                 session.channel.updateConfiguration(configuration)
+                let cancelObservation = session.channel.observe { [storage] value in
+                    storage.value = value
+                }
+                self.session?.configuration = configuration
+                self.session?.cancelObservation = cancelObservation
                 storage.value = session.channel.currentValue()
             }
+        }
+
+        isolated deinit {
+            session?.cancelObservation()
         }
     }
 

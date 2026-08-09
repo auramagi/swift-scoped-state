@@ -5,8 +5,6 @@
 //  Created by Mikhail Apurin on 2026-08-08.
 //
 
-import Combine
-
 public typealias Connection<WrappedValue> = GenericConnection<Void, ReadOnlyConnectedValue<WrappedValue>>
 
 extension Connection {
@@ -21,34 +19,46 @@ extension Connection {
     /// external implementation.
     /// Its closures retain any implementation object needed to keep the value alive.
     @MainActor public struct Channel {
-        let currentValue: @MainActor () -> Connected.WrappedValue
+        public typealias ReceiveValue = @MainActor (Connected.WrappedValue) -> Void
 
-        let updates: any Publisher<Connected.WrappedValue, Never>
+        public typealias Cancel = () -> Void
+
+        let currentValue: @MainActor () -> Connected.WrappedValue
 
         let setValue: (@MainActor (Connected.WrappedValue) -> Void)?
 
+        let observe: @MainActor (@escaping ReceiveValue) -> Cancel
+
         let updateConfiguration: @MainActor (Configuration) -> Void
 
-        public init<WrappedValue>(
+        public init<WrappedValue, Observation>(
             currentValue: @escaping @MainActor () -> WrappedValue,
-            updates: any Publisher<WrappedValue, Never>,
+            observe: @escaping @MainActor (@escaping ReceiveValue) -> Observation,
+            cancel: @escaping (Observation) -> Void,
             updateConfiguration: @escaping @MainActor (Configuration) -> Void = { _ in }
         ) where Connected == ReadOnlyConnectedValue<WrappedValue> {
             self.currentValue = currentValue
-            self.updates = updates
             self.setValue = nil
+            self.observe = { receiveValue in
+                let observation = observe(receiveValue)
+                return { cancel(observation) }
+            }
             self.updateConfiguration = updateConfiguration
         }
 
-        public init<WrappedValue>(
+        public init<WrappedValue, Observation>(
             currentValue: @escaping @MainActor () -> WrappedValue,
-            updates: any Publisher<WrappedValue, Never>,
             setValue: @escaping @MainActor (WrappedValue) -> Void,
+            observe: @escaping @MainActor (@escaping ReceiveValue) -> Observation,
+            cancel: @escaping (Observation) -> Void,
             updateConfiguration: @escaping @MainActor (Configuration) -> Void = { _ in }
         ) where Connected == WritableConnectedValue<WrappedValue> {
             self.currentValue = currentValue
-            self.updates = updates
             self.setValue = setValue
+            self.observe = { receiveValue in
+                let observation = observe(receiveValue)
+                return { cancel(observation) }
+            }
             self.updateConfiguration = updateConfiguration
         }
     }
@@ -87,28 +97,32 @@ extension GenericConnection where Configuration == Void {
         )
     }
 
-    public init<WrappedValue>(
+    public init<WrappedValue, Observation>(
         currentValue: @escaping @MainActor () -> WrappedValue,
-        updates: any Publisher<WrappedValue, Never>
+        observe: @escaping @MainActor (@escaping Channel.ReceiveValue) -> Observation,
+        cancel: @escaping (Observation) -> Void
     ) where Connected == ReadOnlyConnectedValue<WrappedValue> {
         self.init {
             Channel(
                 currentValue: currentValue,
-                updates: updates
+                observe: observe,
+                cancel: cancel
             )
         }
     }
 
-    public init<WrappedValue>(
+    public init<WrappedValue, Observation>(
         currentValue: @escaping @MainActor () -> WrappedValue,
-        updates: any Publisher<WrappedValue, Never>,
-        setValue: @escaping @MainActor (WrappedValue) -> Void
+        setValue: @escaping @MainActor (WrappedValue) -> Void,
+        observe: @escaping @MainActor (@escaping Channel.ReceiveValue) -> Observation,
+        cancel: @escaping (Observation) -> Void
     ) where Connected == WritableConnectedValue<WrappedValue> {
         self.init {
             Channel(
                 currentValue: currentValue,
-                updates: updates,
-                setValue: setValue
+                setValue: setValue,
+                observe: observe,
+                cancel: cancel
             )
         }
     }
