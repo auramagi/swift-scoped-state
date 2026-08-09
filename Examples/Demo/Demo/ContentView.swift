@@ -117,15 +117,16 @@ private struct ProductOrderButton: View {
         Button {
             $orderState.wrappedValue = orderState == .inCart ? .notInCart : .inCart
         } label: {
-            Label(buttonTitle, systemImage: orderState == .inCart ? "cart.badge.minus" : "cart.badge.plus")
-                .frame(maxWidth: .infinity)
+            if orderState == .inCart {
+                Label("Remove from cart", systemImage: "cart.badge.minus")
+                    .frame(maxWidth: .infinity)
+            } else {
+                Label("Add to cart", systemImage: "cart.badge.plus")
+                    .frame(maxWidth: .infinity)
+            }
         }
         .buttonStyle(.borderedProminent)
         .controlSize(.large)
-    }
-
-    private var buttonTitle: String {
-        orderState == .inCart ? "Remove from cart" : "Add to cart"
     }
 }
 
