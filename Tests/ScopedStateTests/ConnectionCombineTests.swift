@@ -43,13 +43,21 @@ import Testing
         let connection: Connection<Int>.Writable = .subject(subject)
         let channel = connection.makeChannel(())
 
-        guard let setValue = channel.setValue else {
-            Issue.record("A writable subject connection should expose a setter")
+        guard case let .current(currentValue) = channel.valueSource,
+              let setValue = channel.setValue,
+              let observe = channel.observe else {
+            Issue.record("A writable subject connection should expose its complete channel")
             return
         }
+        #expect(currentValue() == 1)
+
+        var receivedValues: [Int] = []
+        let cancellationToken = observe { receivedValues.append($0) }
 
         setValue(2)
         #expect(subject.value == 2)
+        #expect(receivedValues == [1, 2])
+        cancellationToken.cancel()
     }
 
     @Test
@@ -62,14 +70,22 @@ import Testing
         )
         let channel = connection.makeChannel(())
 
-        guard let setValue = channel.setValue else {
-            Issue.record("A writable subject connection should expose its custom setter")
+        guard case let .current(currentValue) = channel.valueSource,
+              let setValue = channel.setValue,
+              let observe = channel.observe else {
+            Issue.record("A custom-setter subject should expose its complete channel")
             return
         }
+        #expect(currentValue() == 1)
+
+        var receivedValues: [Int] = []
+        let cancellationToken = observe { receivedValues.append($0) }
 
         setValue(2)
         #expect(writtenValues == [2])
         #expect(subject.value == 1)
+        #expect(receivedValues == [1])
+        cancellationToken.cancel()
     }
 
     @Test
@@ -106,14 +122,23 @@ import Testing
         )
         let channel = connection.makeChannel(())
 
-        guard let setValue = channel.setValue else {
-            Issue.record("A mapped writable subject should expose its custom setter")
+        guard case let .current(currentValue) = channel.valueSource,
+              let setValue = channel.setValue,
+              let observe = channel.observe else {
+            Issue.record("A mapped writable subject should expose its complete channel")
             return
         }
+        #expect(currentValue() == "value=2")
+
+        var receivedValues: [String] = []
+        let cancellationToken = observe { receivedValues.append($0) }
+        subject.send(3)
 
         setValue("replacement")
         #expect(writtenValues == ["replacement"])
-        #expect(subject.value == 2)
+        #expect(subject.value == 3)
+        #expect(receivedValues == ["value=2", "value=3"])
+        cancellationToken.cancel()
     }
 
     @Test
@@ -157,13 +182,22 @@ import Testing
         )
         let channel = connection.makeChannel(())
 
-        guard let setValue = channel.setValue else {
-            Issue.record("A writable publisher should expose its setter")
+        guard case let .initial(initialValue) = channel.valueSource,
+              let setValue = channel.setValue,
+              let observe = channel.observe else {
+            Issue.record("A writable publisher should expose its complete channel")
             return
         }
+        #expect(initialValue == 1)
+
+        var receivedValues: [Int] = []
+        let cancellationToken = observe { receivedValues.append($0) }
 
         setValue(2)
+        publisher.send(3)
         #expect(writtenValues == [2])
+        #expect(receivedValues == [3])
+        cancellationToken.cancel()
     }
 
     @Test
@@ -204,12 +238,21 @@ import Testing
         )
         let channel = connection.makeChannel(())
 
-        guard let setValue = channel.setValue else {
-            Issue.record("A writable current-value publisher should expose its setter")
+        guard case let .current(currentValue) = channel.valueSource,
+              let setValue = channel.setValue,
+              let observe = channel.observe else {
+            Issue.record("A writable current-value publisher should expose its complete channel")
             return
         }
+        #expect(currentValue() == 1)
+
+        var receivedValues: [Int] = []
+        let cancellationToken = observe { receivedValues.append($0) }
 
         setValue(2)
+        publisher.send(3)
         #expect(writtenValues == [2])
+        #expect(receivedValues == [3])
+        cancellationToken.cancel()
     }
 }

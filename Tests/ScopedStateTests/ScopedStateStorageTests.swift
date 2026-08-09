@@ -29,4 +29,15 @@ import Testing
         #expect(storage.value == nil)
         #expect(storage.generation == 3)
     }
+
+    #if os(macOS)
+    @Test
+    func readingRequiredValueBeforeAssignmentFails() async {
+        await #expect(processExitsWith: .failure) {
+            await MainActor.run {
+                _ = ScopedStateStorage<Int>().requiredValue
+            }
+        }
+    }
+    #endif
 }
