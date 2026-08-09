@@ -34,7 +34,7 @@ import SwiftUI
 
             var configuration: Configuration
 
-            var cancellationToken: Connection.Channel.CancellationToken
+            var cancellationToken: Connection.Channel.CancellationToken?
         }
 
         let storage = ScopedStateStorage<Connected.WrappedValue>()
@@ -71,26 +71,34 @@ import SwiftUI
                 let connection = context.scopeStorage.requiredValue[keyPath: context.keyPath]
                 let channel = connection.makeChannel(configuration)
 
-                session?.cancellationToken.cancel()
+                session?.cancellationToken?.cancel()
                 session = Session(
                     context: context,
                     connection: connection,
                     channel: channel,
                     configuration: configuration,
-                    cancellationToken: channel.observe { [storage] value in
-                        storage.value = value
-                    }
+                    cancellationToken: activate(channel)
                 )
-                storage.value = channel.currentValue()
             } else if let session, !session.connection.configurationsEqual(session.configuration, configuration) {
-                session.cancellationToken.cancel()
+                session.cancellationToken?.cancel()
                 session.channel.updateConfiguration(configuration)
                 self.session?.configuration = configuration
-                self.session?.cancellationToken = session.channel
-                    .observe { [storage] value in
-                        storage.value = value
-                    }
-                storage.value = session.channel.currentValue()
+                self.session?.cancellationToken = activate(session.channel)
+            } else if let session, session.channel.observe == nil, case let .current(currentValue) = session.channel.valueSource {
+                storage.value = currentValue()
+            }
+        }
+
+        private func activate(_ channel: Connection.Channel) -> Connection.Channel.CancellationToken? {
+            switch channel.valueSource {
+            case let .initial(value):
+                storage.value = value
+                return channel.observe? { [storage] in storage.value = $0 }
+
+            case let .current(currentValue):
+                let cancellationToken = channel.observe? { [storage] in storage.value = $0 }
+                storage.value = currentValue()
+                return cancellationToken
             }
         }
     }

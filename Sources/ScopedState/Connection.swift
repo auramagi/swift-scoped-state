@@ -15,11 +15,17 @@ extension Connection {
 
 /// The generic implementation underlying the public `Connection<Value>` family.
 @MainActor public struct GenericConnection<Configuration, Connected: ConnectedValue> {
-    /// A configurable current-value channel between scoped state and an
-    /// external implementation.
+    /// A configurable value channel between scoped state and an external
+    /// implementation.
     /// Its closures retain any implementation object needed to keep the value alive.
     @MainActor public struct Channel {
         public typealias ReceiveValue = @MainActor (Connected.WrappedValue) -> Void
+
+        public enum ValueSource {
+            case initial(Connected.WrappedValue)
+
+            case current(@MainActor () -> Connected.WrappedValue)
+        }
 
         final class CancellationToken {
             private var cancellation: (() -> Void)?
@@ -41,44 +47,13 @@ extension Connection {
             }
         }
 
-        let currentValue: @MainActor () -> Connected.WrappedValue
+        let valueSource: ValueSource
 
         let setValue: (@MainActor (Connected.WrappedValue) -> Void)?
 
-        let observe: @MainActor (@escaping ReceiveValue) -> CancellationToken
+        let observe: (@MainActor (@escaping ReceiveValue) -> CancellationToken)?
 
         let updateConfiguration: @MainActor (Configuration) -> Void
-
-        public init<WrappedValue, Observation>(
-            currentValue: @escaping @MainActor () -> WrappedValue,
-            observe: @escaping @MainActor (@escaping ReceiveValue) -> Observation,
-            cancel: @escaping (Observation) -> Void,
-            updateConfiguration: @escaping @MainActor (Configuration) -> Void = { _ in }
-        ) where Connected == ReadOnlyConnectedValue<WrappedValue> {
-            self.currentValue = currentValue
-            self.setValue = nil
-            self.observe = { receiveValue in
-                let observation = observe(receiveValue)
-                return CancellationToken { cancel(observation) }
-            }
-            self.updateConfiguration = updateConfiguration
-        }
-
-        public init<WrappedValue, Observation>(
-            currentValue: @escaping @MainActor () -> WrappedValue,
-            setValue: @escaping @MainActor (WrappedValue) -> Void,
-            observe: @escaping @MainActor (@escaping ReceiveValue) -> Observation,
-            cancel: @escaping (Observation) -> Void,
-            updateConfiguration: @escaping @MainActor (Configuration) -> Void = { _ in }
-        ) where Connected == WritableConnectedValue<WrappedValue> {
-            self.currentValue = currentValue
-            self.setValue = setValue
-            self.observe = { receiveValue in
-                let observation = observe(receiveValue)
-                return CancellationToken { cancel(observation) }
-            }
-            self.updateConfiguration = updateConfiguration
-        }
     }
 
     let makeChannel: @MainActor (Configuration) -> Channel
@@ -91,6 +66,43 @@ extension Connection {
     ) {
         self.makeChannel = makeChannel
         self.configurationsEqual = configurationsEqual
+    }
+}
+
+extension GenericConnection.Channel {
+    public init<WrappedValue, Observation>(
+        valueSource: ValueSource,
+        observe: @escaping @MainActor (@escaping ReceiveValue) -> Observation,
+        cancel: @escaping (Observation) -> Void,
+        updateConfiguration: @escaping @MainActor (Configuration) -> Void = { _ in }
+    ) where Connected == ReadOnlyConnectedValue<WrappedValue> {
+        self.init(
+            valueSource: valueSource,
+            setValue: nil,
+            observe: { receiveValue in
+                let observation = observe(receiveValue)
+                return CancellationToken { cancel(observation) }
+            },
+            updateConfiguration: updateConfiguration
+        )
+    }
+
+    public init<WrappedValue, Observation>(
+        valueSource: ValueSource,
+        setValue: @escaping @MainActor (WrappedValue) -> Void,
+        observe: @escaping @MainActor (@escaping ReceiveValue) -> Observation,
+        cancel: @escaping (Observation) -> Void,
+        updateConfiguration: @escaping @MainActor (Configuration) -> Void = { _ in }
+    ) where Connected == WritableConnectedValue<WrappedValue> {
+        self.init(
+            valueSource: valueSource,
+            setValue: setValue,
+            observe: { receiveValue in
+                let observation = observe(receiveValue)
+                return CancellationToken { cancel(observation) }
+            },
+            updateConfiguration: updateConfiguration
+        )
     }
 }
 
@@ -122,7 +134,7 @@ extension GenericConnection where Configuration == Void {
     ) where Connected == ReadOnlyConnectedValue<WrappedValue> {
         self.init {
             Channel(
-                currentValue: currentValue,
+                valueSource: .current(currentValue),
                 observe: observe,
                 cancel: cancel
             )
@@ -137,7 +149,7 @@ extension GenericConnection where Configuration == Void {
     ) where Connected == WritableConnectedValue<WrappedValue> {
         self.init {
             Channel(
-                currentValue: currentValue,
+                valueSource: .current(currentValue),
                 setValue: setValue,
                 observe: observe,
                 cancel: cancel

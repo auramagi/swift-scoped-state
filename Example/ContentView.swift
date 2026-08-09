@@ -289,7 +289,7 @@ struct ProductDetailSnapshot: Equatable {
                 let container = ProductDetailContainer(appContainer: self, configuration: configuration)
                 let scope = container.scope
                 return .init(
-                    currentValue: { scope },
+                    valueSource: .current { scope },
                     observe: { Empty<ProductScope, Never>(completeImmediately: false).sink(receiveValue: $0) },
                     cancel: { $0.cancel() },
                     updateConfiguration: { container.update(configuration: $0) }
@@ -300,11 +300,7 @@ struct ProductDetailSnapshot: Equatable {
 
     var diagnosticsScope: AppDiagnosticsScope {
         AppDiagnosticsScope(
-            containerID: Connection(
-                currentValue: { self.containerID },
-                observe: { Empty<UUID, Never>(completeImmediately: false).sink(receiveValue: $0) },
-                cancel: { $0.cancel() }
-            )
+            containerID: .constant(containerID)
         )
     }
 
@@ -459,44 +455,13 @@ struct ProductDetailSnapshot: Equatable {
 
     var scope: ProductScope {
         ProductScope(
-            orderState: .init(
-                currentValue: { self.orderSubject.value },
-                setValue: { self.setOrderState($0) },
-                observe: { self.orderSubject.sink(receiveValue: $0) },
-                cancel: { $0.cancel() }
-            ),
-            snapshot: .init(
-                currentValue: { self.snapshot },
-                observe: { self.snapshotSubject.sink(receiveValue: $0) },
-                cancel: { $0.cancel() }
-            ),
-            isAvailable: .init(
-                currentValue: { self.availabilitySubject.value },
-                observe: { self.availabilitySubject.sink(receiveValue: $0) },
-                cancel: { $0.cancel() }
-            ),
-            isFavorite: .init(
-                currentValue: { self.favoriteSubject.value },
-                setValue: { self.setFavorite($0) },
-                observe: { self.favoriteSubject.sink(receiveValue: $0) },
-                cancel: { $0.cancel() }
-            ),
-            options: .init(
-                currentValue: { self.optionsSubject.value },
-                observe: { self.optionsSubject.sink(receiveValue: $0) },
-                cancel: { $0.cancel() }
-            ),
-            optionControls: .init(
-                currentValue: { ProductOptionControls(options: self.optionsSubject.value) },
-                observe: { self.optionsSubject.map(ProductOptionControls.init).sink(receiveValue: $0) },
-                cancel: { $0.cancel() }
-            ),
-            replaceableOptions: .init(
-                currentValue: { self.optionsSubject.value },
-                setValue: { self.optionsSubject.send($0) },
-                observe: { self.optionsSubject.sink(receiveValue: $0) },
-                cancel: { $0.cancel() }
-            )
+            orderState: .subject(orderSubject, set: setOrderState),
+            snapshot: .subject(snapshotSubject),
+            isAvailable: .subject(availabilitySubject),
+            isFavorite: .subject(favoriteSubject, set: setFavorite),
+            options: .subject(optionsSubject),
+            optionControls: .subject(optionsSubject, map: ProductOptionControls.init),
+            replaceableOptions: .subject(optionsSubject)
         )
     }
 
