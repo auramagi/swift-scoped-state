@@ -11,42 +11,42 @@ import SwiftUI
     private typealias Connection = GenericConnection<Configuration, Connected>
 
     @MainActor private final class Coordinator {
-        @MainActor struct Session {
-            struct Context: Equatable {
+        @MainActor struct Context {
+            struct ConnectionIdentity: Equatable {
                 let scopeStorage: ScopedStateStorage<Scope>
 
                 let generation: UInt
 
                 let keyPath: KeyPath<Scope, Connection>
 
-                static func == (lhs: Context, rhs: Context) -> Bool {
+                static func == (lhs: ConnectionIdentity, rhs: ConnectionIdentity) -> Bool {
                     lhs.scopeStorage === rhs.scopeStorage
                     && lhs.generation == rhs.generation
                     && lhs.keyPath == rhs.keyPath
                 }
             }
 
-            let context: Context
+            let identity: ConnectionIdentity
 
             let connection: Connection
 
-            let channel: Connection.Channel
+            let session: Connection.Session
 
             var configuration: Configuration
         }
 
         let storage = ScopedStateStorage<Connected.WrappedValue>()
 
-        private var session: Session?
+        private var context: Context?
 
         var value: Connected.WrappedValue {
             get { storage.requiredValue }
             set {
-                guard let channel = session?.channel else {
+                guard let session = context?.session else {
                     preconditionFailure("Scoped state was written before DynamicProperty.update()")
                 }
 
-                if let setValue = channel.setValue {
+                if let setValue = session.setValue {
                     setValue(newValue)
                 } else {
                     storage.value = newValue
@@ -59,35 +59,35 @@ import SwiftUI
             keyPath: KeyPath<Scope, Connection>,
             configuration: Configuration
         ) {
-            let context = Session.Context(
+            let identity = Context.ConnectionIdentity(
                 scopeStorage: scopeStorage,
                 generation: scopeStorage.generation,
                 keyPath: keyPath
             )
-            let yield: Connection.Channel.YieldValue = { [storage] in storage.value = $0 }
+            let yield: Connection.Session.YieldValue = { [storage] in storage.value = $0 }
 
-            if session?.context != context {
-                let connection = context.scopeStorage.requiredValue[keyPath: context.keyPath]
-                let channel = connection.makeChannel(configuration)
+            if context?.identity != identity {
+                let connection = identity.scopeStorage.requiredValue[keyPath: identity.keyPath]
+                let session = connection.makeSession(configuration)
 
-                session?.channel.deactivate()
-                session = Session(
-                    context: context,
+                context?.session.deactivate()
+                context = Context(
+                    identity: identity,
                     connection: connection,
-                    channel: channel,
+                    session: session,
                     configuration: configuration
                 )
-                channel.activate(yield)
-            } else if let session, !session.connection.configurationsEqual(session.configuration, configuration) {
-                session.channel.reconfigure(configuration, yield)
-                self.session?.configuration = configuration
+                session.activate(yield)
+            } else if let context, !context.connection.configurationsEqual(context.configuration, configuration) {
+                context.session.reconfigure(configuration, yield)
+                self.context?.configuration = configuration
             } else {
-                session?.channel.update(yield)
+                context?.session.update(yield)
             }
         }
 
         isolated deinit {
-            session?.channel.deactivate()
+            context?.session.deactivate()
         }
     }
 

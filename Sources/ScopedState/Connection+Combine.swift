@@ -7,7 +7,7 @@
 
 import Combine
 
-private extension GenericConnection.Channel {
+private extension GenericConnection.Session {
     static func observing(
         activate: @escaping @MainActor (@escaping YieldValue) -> AnyCancellable,
         setValue: SetValue?
@@ -86,7 +86,7 @@ extension GenericConnection where Configuration == Void {
         _ subject: CurrentValueSubject<WrappedValue, Never>
     ) -> Self where Connected == ReadOnlyConnectedValue<WrappedValue> {
         Self {
-            Channel.subject(
+            Session.subject(
                 subject: subject,
                 map: { $0 },
                 setValue: nil
@@ -99,7 +99,7 @@ extension GenericConnection where Configuration == Void {
         _ subject: CurrentValueSubject<WrappedValue, Never>
     ) -> Self where Connected == WritableConnectedValue<WrappedValue> {
         Self {
-            Channel.subject(
+            Session.subject(
                 subject: subject,
                 map: { $0 },
                 setValue: { subject.send($0) }
@@ -114,7 +114,7 @@ extension GenericConnection where Configuration == Void {
         set: @escaping @MainActor (WrappedValue) -> Void
     ) -> Self where Connected == WritableConnectedValue<WrappedValue> {
         Self {
-            Channel.subject(
+            Session.subject(
                 subject: subject,
                 map: { $0 },
                 setValue: set
@@ -128,7 +128,7 @@ extension GenericConnection where Configuration == Void {
         map: @escaping @MainActor (SubjectValue) -> WrappedValue
     ) -> Self where Connected == ReadOnlyConnectedValue<WrappedValue> {
         Self {
-            Channel.subject(
+            Session.subject(
                 subject: subject,
                 map: map,
                 setValue: nil
@@ -144,7 +144,7 @@ extension GenericConnection where Configuration == Void {
         set: @escaping @MainActor (WrappedValue) -> Void
     ) -> Self where Connected == WritableConnectedValue<WrappedValue> {
         Self {
-            Channel.subject(
+            Session.subject(
                 subject: subject,
                 map: map,
                 setValue: set
@@ -159,7 +159,7 @@ extension GenericConnection where Configuration == Void {
         initialValue: WrappedValue
     ) -> Self where Updates.Output == WrappedValue, Updates.Failure == Never, Connected == ReadOnlyConnectedValue<WrappedValue> {
         Self {
-            Channel.publisher(
+            Session.publisher(
                 initialValue: initialValue,
                 updates: publisher,
                 map: { $0 },
@@ -176,7 +176,7 @@ extension GenericConnection where Configuration == Void {
         set: @escaping @MainActor (WrappedValue) -> Void
     ) -> Self where Updates.Output == WrappedValue, Updates.Failure == Never, Connected == WritableConnectedValue<WrappedValue> {
         Self {
-            Channel.publisher(
+            Session.publisher(
                 initialValue: initialValue,
                 updates: publisher,
                 map: { $0 },
@@ -192,7 +192,7 @@ extension GenericConnection where Configuration == Void {
         currentValue: @escaping @MainActor () -> WrappedValue
     ) -> Self where Updates.Output == WrappedValue, Updates.Failure == Never, Connected == ReadOnlyConnectedValue<WrappedValue> {
         Self {
-            Channel.publisher(
+            Session.publisher(
                 currentValue: currentValue,
                 updates: publisher,
                 map: { $0 },
@@ -209,7 +209,7 @@ extension GenericConnection where Configuration == Void {
         set: @escaping @MainActor (WrappedValue) -> Void
     ) -> Self where Updates.Output == WrappedValue, Updates.Failure == Never, Connected == WritableConnectedValue<WrappedValue> {
         Self {
-            Channel.publisher(
+            Session.publisher(
                 currentValue: currentValue,
                 updates: publisher,
                 map: { $0 },

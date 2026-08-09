@@ -11,25 +11,25 @@ import Testing
 @Suite("Core connections")
 @MainActor struct ConnectionCoreTests {
     @Test
-    func unconfiguredConnectionCanDefineItsChannelInline() {
+    func unconfiguredConnectionCanDefineItsSessionInline() {
         var writtenValues: [Int] = []
         let connection = Connection<Int>.Writable { yield in
             yield(1)
         } setValue: {
             writtenValues.append($0)
         }
-        let channel = connection.makeChannel(())
+        let session = connection.makeSession(())
 
         var receivedValues: [Int] = []
-        channel.activate { receivedValues.append($0) }
-        channel.setValue?(2)
+        session.activate { receivedValues.append($0) }
+        session.setValue?(2)
 
         #expect(receivedValues == [1])
         #expect(writtenValues == [2])
     }
 
     @Test
-    func inlineChannelStateIsIndependentForEverySession() {
+    func inlineOperationStateIsIndependentBetweenSessions() {
         final class Counter {
             var value = 0
         }
@@ -38,21 +38,21 @@ import Testing
             counter.value += 1
             yield(counter.value)
         }
-        let firstChannel = connection.makeChannel(())
-        let secondChannel = connection.makeChannel(())
+        let firstSession = connection.makeSession(())
+        let secondSession = connection.makeSession(())
 
         var firstValues: [Int] = []
         var secondValues: [Int] = []
-        firstChannel.activate { firstValues.append($0) }
-        firstChannel.activate { firstValues.append($0) }
-        secondChannel.activate { secondValues.append($0) }
+        firstSession.activate { firstValues.append($0) }
+        firstSession.activate { firstValues.append($0) }
+        secondSession.activate { secondValues.append($0) }
 
         #expect(firstValues == [1, 2])
         #expect(secondValues == [1])
     }
 
     @Test
-    func inlineWritableChannelStateIsIndependentForEverySession() {
+    func inlineWritableOperationStateIsIndependentBetweenSessions() {
         final class Counter {
             var value = 0
         }
@@ -68,12 +68,12 @@ import Testing
         } setValue: { [counter = makeCounter()] value in
             counter.value += value
         }
-        let firstChannel = connection.makeChannel(())
-        let secondChannel = connection.makeChannel(())
+        let firstSession = connection.makeSession(())
+        let secondSession = connection.makeSession(())
 
-        firstChannel.setValue?(1)
-        firstChannel.setValue?(1)
-        secondChannel.setValue?(1)
+        firstSession.setValue?(1)
+        firstSession.setValue?(1)
+        secondSession.setValue?(1)
 
         #expect(counters.count == 2)
         #expect(counters.map(\.value) == [2, 1])
@@ -82,19 +82,19 @@ import Testing
     @Test
     func constantProvidesAnUnobservedInitialValue() {
         let connection: Connection<Int> = .constant(42)
-        let channel = connection.makeChannel(())
+        let session = connection.makeSession(())
 
         #expect(connection.configurationsEqual((), ()))
-        #expect(channel.setValue == nil)
+        #expect(session.setValue == nil)
 
         var receivedValues: [Int] = []
-        let yield: Connection<Int>.Channel.YieldValue = { receivedValues.append($0) }
-        channel.activate(yield)
+        let yield: Connection<Int>.Session.YieldValue = { receivedValues.append($0) }
+        session.activate(yield)
         #expect(receivedValues == [42])
 
-        channel.update(yield)
+        session.update(yield)
         #expect(receivedValues == [42])
 
-        channel.deactivate()
+        session.deactivate()
     }
 }

@@ -93,7 +93,7 @@ import Testing
                 self.createdConfigurations.append(configuration)
                 self.currentScope = self.scope(for: configuration)
 
-                return Connection<ChildScope>.Configuration<Int>.Channel(
+                return Connection<ChildScope>.Configuration<Int>.Session(
                     currentValue: { self.currentScope },
                     observe: { self.observe($0) },
                     cancel: { self.cancel($0) },

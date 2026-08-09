@@ -15,10 +15,10 @@ extension Connection {
 
 /// The generic implementation underlying the public `Connection<Value>` family.
 @MainActor public struct GenericConnection<Configuration, Connected: ConnectedValue> {
-    /// A configurable value channel between scoped state and an external
+    /// A configurable session connecting scoped state to an external
     /// implementation.
     /// Its closures retain any implementation object needed to keep the value alive.
-    @MainActor public struct Channel {
+    @MainActor public struct Session {
         public typealias YieldValue = @MainActor (Connected.WrappedValue) -> Void
 
         public typealias Activate = @MainActor (@escaping YieldValue) -> Void
@@ -42,20 +42,20 @@ extension Connection {
         let setValue: SetValue?
     }
 
-    let makeChannel: @MainActor (Configuration) -> Channel
+    let makeSession: @MainActor (Configuration) -> Session
 
     let configurationsEqual: @MainActor (Configuration, Configuration) -> Bool
 
     public init(
-        makeChannel: @escaping @MainActor (Configuration) -> Channel,
+        makeSession: @escaping @MainActor (Configuration) -> Session,
         configurationsEqual: @escaping @MainActor (Configuration, Configuration) -> Bool
     ) {
-        self.makeChannel = makeChannel
+        self.makeSession = makeSession
         self.configurationsEqual = configurationsEqual
     }
 }
 
-extension GenericConnection.Channel {
+extension GenericConnection.Session {
     public init<WrappedValue>(
         activate: @escaping Activate,
         update: @escaping Update = { _ in },
@@ -84,7 +84,7 @@ extension GenericConnection.Channel {
     }
 }
 
-extension GenericConnection.Channel where Configuration == Void {
+extension GenericConnection.Session where Configuration == Void {
     public init<WrappedValue>(
         activate: @escaping Activate,
         update: @escaping Update = { _ in },
@@ -116,10 +116,10 @@ extension GenericConnection.Channel where Configuration == Void {
 
 extension GenericConnection where Configuration: Equatable {
     public init(
-        makeChannel: @escaping @MainActor (Configuration) -> Channel
+        makeSession: @escaping @MainActor (Configuration) -> Session
     ) {
         self.init(
-            makeChannel: makeChannel,
+            makeSession: makeSession,
             configurationsEqual: { $0 == $1 }
         )
     }
@@ -127,10 +127,10 @@ extension GenericConnection where Configuration: Equatable {
 
 extension GenericConnection where Configuration == Void {
     public init(
-        makeChannel: @escaping @MainActor () -> Channel
+        makeSession: @escaping @MainActor () -> Session
     ) {
         self.init(
-            makeChannel: { _ in makeChannel() },
+            makeSession: { _ in makeSession() },
             configurationsEqual: { _, _ in true }
         )
     }

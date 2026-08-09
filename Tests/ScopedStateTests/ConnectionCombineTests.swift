@@ -15,18 +15,18 @@ import Testing
     func readOnlySubjectProvidesCurrentAndSubsequentValues() {
         let subject = CurrentValueSubject<Int, Never>(1)
         let connection: Connection<Int> = .subject(subject)
-        let channel = connection.makeChannel(())
+        let session = connection.makeSession(())
 
-        #expect(channel.setValue == nil)
+        #expect(session.setValue == nil)
 
         var receivedValues: [Int] = []
-        channel.activate { receivedValues.append($0) }
+        session.activate { receivedValues.append($0) }
         #expect(receivedValues == [1])
 
         subject.send(2)
         #expect(receivedValues == [1, 2])
 
-        channel.deactivate()
+        session.deactivate()
         subject.send(3)
         #expect(receivedValues == [1, 2])
     }
@@ -35,18 +35,18 @@ import Testing
     func writableSubjectUsesSubjectSendByDefault() {
         let subject = CurrentValueSubject<Int, Never>(1)
         let connection: Connection<Int>.Writable = .subject(subject)
-        let channel = connection.makeChannel(())
+        let session = connection.makeSession(())
 
-        let setValue = channel.setValue
+        let setValue = session.setValue
         #expect(setValue != nil)
 
         var receivedValues: [Int] = []
-        channel.activate { receivedValues.append($0) }
+        session.activate { receivedValues.append($0) }
 
         setValue?(2)
         #expect(subject.value == 2)
         #expect(receivedValues == [1, 2])
-        channel.deactivate()
+        session.deactivate()
     }
 
     @Test
@@ -57,19 +57,19 @@ import Testing
             subject,
             set: { writtenValues.append($0) }
         )
-        let channel = connection.makeChannel(())
+        let session = connection.makeSession(())
 
-        let setValue = channel.setValue
+        let setValue = session.setValue
         #expect(setValue != nil)
 
         var receivedValues: [Int] = []
-        channel.activate { receivedValues.append($0) }
+        session.activate { receivedValues.append($0) }
 
         setValue?(2)
         #expect(writtenValues == [2])
         #expect(subject.value == 1)
         #expect(receivedValues == [1])
-        channel.deactivate()
+        session.deactivate()
     }
 
     @Test
@@ -79,13 +79,13 @@ import Testing
             subject,
             map: { "value=\($0)" }
         )
-        let channel = connection.makeChannel(())
+        let session = connection.makeSession(())
 
         var receivedValues: [String] = []
-        channel.activate { receivedValues.append($0) }
+        session.activate { receivedValues.append($0) }
         subject.send(3)
         #expect(receivedValues == ["value=2", "value=3"])
-        channel.deactivate()
+        session.deactivate()
     }
 
     @Test
@@ -97,20 +97,20 @@ import Testing
             map: { "value=\($0)" },
             set: { writtenValues.append($0) }
         )
-        let channel = connection.makeChannel(())
+        let session = connection.makeSession(())
 
-        let setValue = channel.setValue
+        let setValue = session.setValue
         #expect(setValue != nil)
 
         var receivedValues: [String] = []
-        channel.activate { receivedValues.append($0) }
+        session.activate { receivedValues.append($0) }
         subject.send(3)
 
         setValue?("replacement")
         #expect(writtenValues == ["replacement"])
         #expect(subject.value == 3)
         #expect(receivedValues == ["value=2", "value=3"])
-        channel.deactivate()
+        session.deactivate()
     }
 
     @Test
@@ -120,16 +120,16 @@ import Testing
             publisher,
             initialValue: 1
         )
-        let channel = connection.makeChannel(())
+        let session = connection.makeSession(())
 
         var receivedValues: [Int] = []
-        channel.activate { receivedValues.append($0) }
+        session.activate { receivedValues.append($0) }
         #expect(receivedValues == [1])
 
         publisher.send(2)
         #expect(receivedValues == [1, 2])
 
-        channel.deactivate()
+        session.deactivate()
         publisher.send(3)
         #expect(receivedValues == [1, 2])
     }
@@ -143,19 +143,19 @@ import Testing
             initialValue: 1,
             set: { writtenValues.append($0) }
         )
-        let channel = connection.makeChannel(())
+        let session = connection.makeSession(())
 
-        let setValue = channel.setValue
+        let setValue = session.setValue
         #expect(setValue != nil)
 
         var receivedValues: [Int] = []
-        channel.activate { receivedValues.append($0) }
+        session.activate { receivedValues.append($0) }
 
         setValue?(2)
         publisher.send(3)
         #expect(writtenValues == [2])
         #expect(receivedValues == [1, 3])
-        channel.deactivate()
+        session.deactivate()
     }
 
     @Test
@@ -166,21 +166,21 @@ import Testing
             publisher,
             currentValue: { current }
         )
-        let channel = connection.makeChannel(())
+        let session = connection.makeSession(())
 
         current = 2
 
         var receivedValues: [Int] = []
-        channel.activate { receivedValues.append($0) }
+        session.activate { receivedValues.append($0) }
         #expect(receivedValues == [2])
 
         current = 3
-        channel.update { receivedValues.append($0) }
+        session.update { receivedValues.append($0) }
         #expect(receivedValues == [2])
 
         publisher.send(3)
         #expect(receivedValues == [2, 3])
-        channel.deactivate()
+        session.deactivate()
     }
 
     @Test
@@ -192,18 +192,18 @@ import Testing
             currentValue: { 1 },
             set: { writtenValues.append($0) }
         )
-        let channel = connection.makeChannel(())
+        let session = connection.makeSession(())
 
-        let setValue = channel.setValue
+        let setValue = session.setValue
         #expect(setValue != nil)
 
         var receivedValues: [Int] = []
-        channel.activate { receivedValues.append($0) }
+        session.activate { receivedValues.append($0) }
 
         setValue?(2)
         publisher.send(3)
         #expect(writtenValues == [2])
         #expect(receivedValues == [1, 3])
-        channel.deactivate()
+        session.deactivate()
     }
 }

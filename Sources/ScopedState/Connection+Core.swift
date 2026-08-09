@@ -5,7 +5,7 @@
 //  Created by Mikhail Apurin on 2026-08-09.
 //
 
-private extension GenericConnection.Channel {
+private extension GenericConnection.Session {
     static func observing<Observation>(
         currentValue: @escaping @MainActor () -> Connected.WrappedValue,
         observe: @escaping @MainActor (@escaping YieldValue) -> Observation,
@@ -45,7 +45,7 @@ private extension GenericConnection.Channel {
     }
 }
 
-extension GenericConnection.Channel {
+extension GenericConnection.Session {
     public init<WrappedValue, Observation>(
         currentValue: @escaping @MainActor () -> WrappedValue,
         observe: @escaping @MainActor (@escaping YieldValue) -> Observation,
@@ -78,7 +78,7 @@ extension GenericConnection.Channel {
     }
 }
 
-extension GenericConnection.Channel where Configuration == Void {
+extension GenericConnection.Session where Configuration == Void {
     public init<WrappedValue, Observation>(
         currentValue: @escaping @MainActor () -> WrappedValue,
         observe: @escaping @MainActor (@escaping YieldValue) -> Observation,
@@ -110,14 +110,14 @@ extension GenericConnection.Channel where Configuration == Void {
 
 extension GenericConnection where Configuration == Void {
     /// Creates an unconfigured connection whose operations' capture-list state
-    /// is recreated for every channel.
+    /// is recreated for every session.
     public init<WrappedValue>(
-        activate: @autoclosure @escaping @MainActor () -> Channel.Activate,
-        update: @autoclosure @escaping @MainActor () -> Channel.Update = ({ (_: @escaping Channel.YieldValue) in } as Channel.Update),
-        deactivate: @autoclosure @escaping @MainActor () -> Channel.Deactivate = ({} as Channel.Deactivate)
+        activate: @autoclosure @escaping @MainActor () -> Session.Activate,
+        update: @autoclosure @escaping @MainActor () -> Session.Update = ({ (_: @escaping Session.YieldValue) in } as Session.Update),
+        deactivate: @autoclosure @escaping @MainActor () -> Session.Deactivate = ({} as Session.Deactivate)
     ) where Connected == ReadOnlyConnectedValue<WrappedValue> {
         self.init {
-            Channel(
+            Session(
                 activate: activate(),
                 update: update(),
                 deactivate: deactivate()
@@ -126,15 +126,15 @@ extension GenericConnection where Configuration == Void {
     }
 
     /// Creates an unconfigured writable connection whose operations' capture-list
-    /// state is recreated for every channel.
+    /// state is recreated for every session.
     public init<WrappedValue>(
-        activate: @autoclosure @escaping @MainActor () -> Channel.Activate,
-        update: @autoclosure @escaping @MainActor () -> Channel.Update = ({ (_: @escaping Channel.YieldValue) in } as Channel.Update),
-        deactivate: @autoclosure @escaping @MainActor () -> Channel.Deactivate = ({} as Channel.Deactivate),
-        setValue: @autoclosure @escaping @MainActor () -> Channel.SetValue
+        activate: @autoclosure @escaping @MainActor () -> Session.Activate,
+        update: @autoclosure @escaping @MainActor () -> Session.Update = ({ (_: @escaping Session.YieldValue) in } as Session.Update),
+        deactivate: @autoclosure @escaping @MainActor () -> Session.Deactivate = ({} as Session.Deactivate),
+        setValue: @autoclosure @escaping @MainActor () -> Session.SetValue
     ) where Connected == WritableConnectedValue<WrappedValue> {
         self.init {
-            Channel(
+            Session(
                 activate: activate(),
                 update: update(),
                 deactivate: deactivate(),
@@ -145,11 +145,11 @@ extension GenericConnection where Configuration == Void {
 
     public init<WrappedValue, Observation>(
         currentValue: @escaping @MainActor () -> WrappedValue,
-        observe: @escaping @MainActor (@escaping Channel.YieldValue) -> Observation,
+        observe: @escaping @MainActor (@escaping Session.YieldValue) -> Observation,
         cancel: @escaping (Observation) -> Void
     ) where Connected == ReadOnlyConnectedValue<WrappedValue> {
         self.init {
-            Channel(
+            Session(
                 currentValue: currentValue,
                 observe: observe,
                 cancel: cancel
@@ -160,11 +160,11 @@ extension GenericConnection where Configuration == Void {
     public init<WrappedValue, Observation>(
         currentValue: @escaping @MainActor () -> WrappedValue,
         setValue: @escaping @MainActor (WrappedValue) -> Void,
-        observe: @escaping @MainActor (@escaping Channel.YieldValue) -> Observation,
+        observe: @escaping @MainActor (@escaping Session.YieldValue) -> Observation,
         cancel: @escaping (Observation) -> Void
     ) where Connected == WritableConnectedValue<WrappedValue> {
         self.init {
-            Channel(
+            Session(
                 currentValue: currentValue,
                 setValue: setValue,
                 observe: observe,
