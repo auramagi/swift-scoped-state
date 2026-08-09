@@ -4,7 +4,7 @@ import Observation
 import ScopedState
 import SwiftUI
 
-@main struct ExampleApp: App {
+@main struct DemoApp: App {
     var body: some Scene {
         WindowGroup {
             AppRootView()
