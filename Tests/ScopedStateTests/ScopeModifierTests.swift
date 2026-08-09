@@ -94,10 +94,10 @@ import Testing
                 self.currentScope = self.scope(for: configuration)
 
                 return Connection<ChildScope>.Configuration<Int>.Channel(
-                    valueSource: .current { self.currentScope },
+                    currentValue: { self.currentScope },
                     observe: { self.observe($0) },
                     cancel: { self.cancel($0) },
-                    updateConfiguration: { self.update(configuration: $0) }
+                    reconfigure: { self.update(configuration: $0) }
                 )
             }
         }

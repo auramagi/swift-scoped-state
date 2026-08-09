@@ -289,10 +289,10 @@ struct ProductDetailSnapshot: Equatable {
                 let container = ProductDetailContainer(appContainer: self, configuration: configuration)
                 let scope = container.scope
                 return .init(
-                    valueSource: .current { scope },
+                    currentValue: { scope },
                     observe: { Empty<ProductScope, Never>(completeImmediately: false).sink(receiveValue: $0) },
                     cancel: { $0.cancel() },
-                    updateConfiguration: { container.update(configuration: $0) }
+                    reconfigure: { container.update(configuration: $0) }
                 )
             }
         )

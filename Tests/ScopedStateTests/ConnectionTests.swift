@@ -11,29 +11,32 @@ import Testing
 @Suite("Connection")
 @MainActor struct ConnectionTests {
     @Test
-    func readOnlyChannelErasesObservationCancellation() {
+    func readOnlyChannelPerformsLifecycleOperations() {
         typealias Channel = Connection<Int>.Channel
 
-        var cancellationCount = 0
-        let channel = Channel(
-            valueSource: .initial(1),
-            observe: { _ in "observation" },
-            cancel: { observation in
-                #expect(observation == "observation")
-                cancellationCount += 1
-            }
-        )
+        var events: [String] = []
+        let channel = Channel { yield in
+            events.append("activate")
+            yield(1)
+        } update: { _ in
+            events.append("update")
+        } reconfigure: { _, _ in
+            events.append("reconfigure")
+        } deactivate: {
+            events.append("deactivate")
+        }
 
         #expect(channel.setValue == nil)
 
-        guard let cancellationToken = channel.observe?({ _ in }) else {
-            Issue.record("The channel should expose its observation")
-            return
-        }
+        var receivedValues: [Int] = []
+        let yield: Channel.YieldValue = { receivedValues.append($0) }
+        channel.activate(yield)
+        channel.update(yield)
+        channel.reconfigure((), yield)
+        channel.deactivate()
 
-        cancellationToken.cancel()
-        cancellationToken.cancel()
-        #expect(cancellationCount == 1)
+        #expect(receivedValues == [1])
+        #expect(events == ["activate", "update", "reconfigure", "deactivate"])
     }
 
     @Test
@@ -41,12 +44,10 @@ import Testing
         typealias Channel = Connection<Int>.Writable.Channel
 
         var writtenValues: [Int] = []
-        let channel = Channel(
-            valueSource: .initial(1),
-            setValue: { writtenValues.append($0) },
-            observe: { _ in () },
-            cancel: { _ in }
-        )
+        let channel = Channel { _ in
+        } setValue: {
+            writtenValues.append($0)
+        }
 
         guard let setValue = channel.setValue else {
             Issue.record("A writable channel should expose its setter")
@@ -59,56 +60,23 @@ import Testing
     }
 
     @Test
-    func cancellationTokenCancelsOnDeinitialization() {
-        typealias CancellationToken = Connection<Int>.Channel.CancellationToken
-
-        var cancellationCount = 0
-        var cancellationToken: CancellationToken? = CancellationToken {
-            cancellationCount += 1
-        }
-
-        #expect(cancellationToken != nil)
-        cancellationToken = nil
-        #expect(cancellationCount == 1)
-    }
-
-    @Test
-    func currentValueSourceReadsTheLatestValueLazily() {
-        var value = 1
-        let source = Connection<Int>.Channel.ValueSource.current { value }
-
-        guard case let .current(currentValue) = source else {
-            Issue.record("The source should retain its current-value getter")
-            return
-        }
-
-        #expect(currentValue() == 1)
-        value = 2
-        #expect(currentValue() == 2)
-    }
-
-    @Test
     func equatableConfigurationUsesValueEquality() {
         typealias ConfiguredConnection = Connection<Int>.Configuration<String>
 
         let connection = ConfiguredConnection { configuration in
-            ConfiguredConnection.Channel(
-                valueSource: .initial(configuration.count),
-                setValue: nil,
-                observe: nil,
-                updateConfiguration: { _ in }
-            )
+            ConfiguredConnection.Channel { yield in
+                yield(configuration.count)
+            } reconfigure: { _, _ in
+            }
         }
 
         #expect(connection.configurationsEqual("same", "same"))
         #expect(!connection.configurationsEqual("short", "longer"))
 
         let channel = connection.makeChannel("value")
-        guard case let .initial(value) = channel.valueSource else {
-            Issue.record("The configured connection should create the expected channel")
-            return
-        }
-        #expect(value == 5)
+        var receivedValues: [Int] = []
+        channel.activate { receivedValues.append($0) }
+        #expect(receivedValues == [5])
     }
 
     @Test
@@ -119,12 +87,10 @@ import Testing
         var updatedConfigurations: [String] = []
         let connection = ConfiguredConnection(
             makeChannel: { _ in
-                ConfiguredConnection.Channel(
-                    valueSource: .initial(0),
-                    setValue: nil,
-                    observe: nil,
-                    updateConfiguration: { updatedConfigurations.append($0) }
-                )
+                ConfiguredConnection.Channel { _ in
+                } reconfigure: { configuration, _ in
+                    updatedConfigurations.append(configuration)
+                }
             },
             configurationsEqual: { lhs, rhs in
                 comparisons.append((lhs, rhs))
@@ -138,44 +104,100 @@ import Testing
         #expect(comparisons[0].1 == "value")
 
         let channel = connection.makeChannel("initial")
-        channel.updateConfiguration("updated")
+        channel.reconfigure("updated") { _ in }
         #expect(updatedConfigurations == ["updated"])
     }
 
     @Test
-    func currentValueConveniencesCreateReadOnlyAndWritableChannels() {
+    func currentValueConveniencesManageObservationLifecycle() {
         var currentValue = 1
         var writtenValues: [Int] = []
+        var observationCount = 0
+        var cancellationCount = 0
 
         let readOnly = Connection<Int>(
             currentValue: { currentValue },
-            observe: { _ in () },
-            cancel: { _ in }
+            observe: { _ in
+                observationCount += 1
+                return observationCount
+            },
+            cancel: { _ in cancellationCount += 1 }
         )
         let writable = Connection<Int>.Writable(
             currentValue: { currentValue },
             setValue: { writtenValues.append($0) },
-            observe: { _ in () },
-            cancel: { _ in }
+            observe: { _ in
+                observationCount += 1
+                return observationCount
+            },
+            cancel: { _ in cancellationCount += 1 }
         )
 
         let readOnlyChannel = readOnly.makeChannel(())
         let writableChannel = writable.makeChannel(())
         #expect(readOnlyChannel.setValue == nil)
 
-        guard case let .current(readReadOnlyValue) = readOnlyChannel.valueSource,
-              case let .current(readWritableValue) = writableChannel.valueSource,
-              let setValue = writableChannel.setValue else {
-            Issue.record("The convenience initializers should create current-value channels")
+        guard let setValue = writableChannel.setValue else {
+            Issue.record("The writable convenience should expose its setter")
             return
         }
 
-        #expect(readReadOnlyValue() == 1)
+        var readOnlyValues: [Int] = []
+        var writableValues: [Int] = []
+        let yieldReadOnly: Connection<Int>.Channel.YieldValue = { readOnlyValues.append($0) }
+        let yieldWritable: Connection<Int>.Writable.Channel.YieldValue = { writableValues.append($0) }
+        readOnlyChannel.activate(yieldReadOnly)
+        writableChannel.activate(yieldWritable)
+
+        #expect(readOnlyValues == [1])
+        #expect(writableValues == [1])
+        #expect(observationCount == 2)
+
         currentValue = 2
-        #expect(readReadOnlyValue() == 2)
-        #expect(readWritableValue() == 2)
+        readOnlyChannel.update(yieldReadOnly)
+        writableChannel.update(yieldWritable)
+        #expect(readOnlyValues == [1])
+        #expect(writableValues == [1])
 
         setValue(3)
         #expect(writtenValues == [3])
+
+        readOnlyChannel.deactivate()
+        writableChannel.deactivate()
+        #expect(cancellationCount == 2)
+    }
+
+    @Test
+    func configuredCurrentValueConvenienceReconnectsAfterConfigurationUpdates() {
+        typealias ConfiguredChannel = Connection<Int>.Configuration<String>.Channel
+
+        var currentValue = 1
+        var updatedConfigurations: [String] = []
+        var observationCount = 0
+        var cancellationCount = 0
+        let channel = ConfiguredChannel(
+            currentValue: { currentValue },
+            observe: { _ in
+                observationCount += 1
+                return observationCount
+            },
+            cancel: { _ in cancellationCount += 1 },
+            reconfigure: { updatedConfigurations.append($0) }
+        )
+
+        var receivedValues: [Int] = []
+        let yield: ConfiguredChannel.YieldValue = { receivedValues.append($0) }
+        channel.activate(yield)
+
+        currentValue = 2
+        channel.reconfigure("updated", yield)
+
+        #expect(receivedValues == [1, 2])
+        #expect(updatedConfigurations == ["updated"])
+        #expect(observationCount == 2)
+        #expect(cancellationCount == 1)
+
+        channel.deactivate()
+        #expect(cancellationCount == 2)
     }
 }

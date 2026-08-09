@@ -18,21 +18,15 @@ import Testing
         let channel = connection.makeChannel(())
 
         #expect(channel.setValue == nil)
-        guard case let .current(currentValue) = channel.valueSource,
-              let observe = channel.observe else {
-            Issue.record("A subject should create an observed current-value channel")
-            return
-        }
-        #expect(currentValue() == 1)
 
         var receivedValues: [Int] = []
-        let cancellationToken = observe { receivedValues.append($0) }
+        channel.activate { receivedValues.append($0) }
         #expect(receivedValues == [1])
 
         subject.send(2)
         #expect(receivedValues == [1, 2])
 
-        cancellationToken.cancel()
+        channel.deactivate()
         subject.send(3)
         #expect(receivedValues == [1, 2])
     }
@@ -43,21 +37,16 @@ import Testing
         let connection: Connection<Int>.Writable = .subject(subject)
         let channel = connection.makeChannel(())
 
-        guard case let .current(currentValue) = channel.valueSource,
-              let setValue = channel.setValue,
-              let observe = channel.observe else {
-            Issue.record("A writable subject connection should expose its complete channel")
-            return
-        }
-        #expect(currentValue() == 1)
+        let setValue = channel.setValue
+        #expect(setValue != nil)
 
         var receivedValues: [Int] = []
-        let cancellationToken = observe { receivedValues.append($0) }
+        channel.activate { receivedValues.append($0) }
 
-        setValue(2)
+        setValue?(2)
         #expect(subject.value == 2)
         #expect(receivedValues == [1, 2])
-        cancellationToken.cancel()
+        channel.deactivate()
     }
 
     @Test
@@ -70,22 +59,17 @@ import Testing
         )
         let channel = connection.makeChannel(())
 
-        guard case let .current(currentValue) = channel.valueSource,
-              let setValue = channel.setValue,
-              let observe = channel.observe else {
-            Issue.record("A custom-setter subject should expose its complete channel")
-            return
-        }
-        #expect(currentValue() == 1)
+        let setValue = channel.setValue
+        #expect(setValue != nil)
 
         var receivedValues: [Int] = []
-        let cancellationToken = observe { receivedValues.append($0) }
+        channel.activate { receivedValues.append($0) }
 
-        setValue(2)
+        setValue?(2)
         #expect(writtenValues == [2])
         #expect(subject.value == 1)
         #expect(receivedValues == [1])
-        cancellationToken.cancel()
+        channel.deactivate()
     }
 
     @Test
@@ -97,18 +81,11 @@ import Testing
         )
         let channel = connection.makeChannel(())
 
-        guard case let .current(currentValue) = channel.valueSource,
-              let observe = channel.observe else {
-            Issue.record("A mapped subject should create an observed current-value channel")
-            return
-        }
-        #expect(currentValue() == "value=2")
-
         var receivedValues: [String] = []
-        let cancellationToken = observe { receivedValues.append($0) }
+        channel.activate { receivedValues.append($0) }
         subject.send(3)
         #expect(receivedValues == ["value=2", "value=3"])
-        cancellationToken.cancel()
+        channel.deactivate()
     }
 
     @Test
@@ -122,23 +99,18 @@ import Testing
         )
         let channel = connection.makeChannel(())
 
-        guard case let .current(currentValue) = channel.valueSource,
-              let setValue = channel.setValue,
-              let observe = channel.observe else {
-            Issue.record("A mapped writable subject should expose its complete channel")
-            return
-        }
-        #expect(currentValue() == "value=2")
+        let setValue = channel.setValue
+        #expect(setValue != nil)
 
         var receivedValues: [String] = []
-        let cancellationToken = observe { receivedValues.append($0) }
+        channel.activate { receivedValues.append($0) }
         subject.send(3)
 
-        setValue("replacement")
+        setValue?("replacement")
         #expect(writtenValues == ["replacement"])
         #expect(subject.value == 3)
         #expect(receivedValues == ["value=2", "value=3"])
-        cancellationToken.cancel()
+        channel.deactivate()
     }
 
     @Test
@@ -150,25 +122,16 @@ import Testing
         )
         let channel = connection.makeChannel(())
 
-        guard case let .initial(initialValue) = channel.valueSource,
-              let observe = channel.observe else {
-            Issue.record("A seeded publisher should create an observed initial-value channel")
-            return
-        }
-        #expect(initialValue == 1)
-
         var receivedValues: [Int] = []
-        var cancellationToken: Connection<Int>.Channel.CancellationToken? = observe {
-            receivedValues.append($0)
-        }
-        #expect(cancellationToken != nil)
+        channel.activate { receivedValues.append($0) }
+        #expect(receivedValues == [1])
 
         publisher.send(2)
-        #expect(receivedValues == [2])
+        #expect(receivedValues == [1, 2])
 
-        cancellationToken = nil
+        channel.deactivate()
         publisher.send(3)
-        #expect(receivedValues == [2])
+        #expect(receivedValues == [1, 2])
     }
 
     @Test
@@ -182,22 +145,17 @@ import Testing
         )
         let channel = connection.makeChannel(())
 
-        guard case let .initial(initialValue) = channel.valueSource,
-              let setValue = channel.setValue,
-              let observe = channel.observe else {
-            Issue.record("A writable publisher should expose its complete channel")
-            return
-        }
-        #expect(initialValue == 1)
+        let setValue = channel.setValue
+        #expect(setValue != nil)
 
         var receivedValues: [Int] = []
-        let cancellationToken = observe { receivedValues.append($0) }
+        channel.activate { receivedValues.append($0) }
 
-        setValue(2)
+        setValue?(2)
         publisher.send(3)
         #expect(writtenValues == [2])
-        #expect(receivedValues == [3])
-        cancellationToken.cancel()
+        #expect(receivedValues == [1, 3])
+        channel.deactivate()
     }
 
     @Test
@@ -210,21 +168,19 @@ import Testing
         )
         let channel = connection.makeChannel(())
 
-        guard case let .current(currentValue) = channel.valueSource,
-              let observe = channel.observe else {
-            Issue.record("A current-value publisher should retain its getter and observation")
-            return
-        }
-
-        #expect(currentValue() == 1)
         current = 2
-        #expect(currentValue() == 2)
 
         var receivedValues: [Int] = []
-        let cancellationToken = observe { receivedValues.append($0) }
+        channel.activate { receivedValues.append($0) }
+        #expect(receivedValues == [2])
+
+        current = 3
+        channel.update { receivedValues.append($0) }
+        #expect(receivedValues == [2])
+
         publisher.send(3)
-        #expect(receivedValues == [3])
-        cancellationToken.cancel()
+        #expect(receivedValues == [2, 3])
+        channel.deactivate()
     }
 
     @Test
@@ -238,21 +194,16 @@ import Testing
         )
         let channel = connection.makeChannel(())
 
-        guard case let .current(currentValue) = channel.valueSource,
-              let setValue = channel.setValue,
-              let observe = channel.observe else {
-            Issue.record("A writable current-value publisher should expose its complete channel")
-            return
-        }
-        #expect(currentValue() == 1)
+        let setValue = channel.setValue
+        #expect(setValue != nil)
 
         var receivedValues: [Int] = []
-        let cancellationToken = observe { receivedValues.append($0) }
+        channel.activate { receivedValues.append($0) }
 
-        setValue(2)
+        setValue?(2)
         publisher.send(3)
         #expect(writtenValues == [2])
-        #expect(receivedValues == [3])
-        cancellationToken.cancel()
+        #expect(receivedValues == [1, 3])
+        channel.deactivate()
     }
 }

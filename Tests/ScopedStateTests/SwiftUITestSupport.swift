@@ -33,6 +33,8 @@ import UIKit
 
     private(set) var cancellationCount = 0
 
+    private(set) var deactivationCount = 0
+
     private(set) var writtenValues: [Value] = []
 
     private var nextObservationID = 0
@@ -64,13 +66,12 @@ import UIKit
     }
 
     var unobservedConnection: Connection<Value> {
-        Connection {
-            Connection<Value>.Channel(
-                valueSource: .current { self.value },
-                setValue: nil,
-                observe: nil,
-                updateConfiguration: { _ in }
-            )
+        Connection { yield in
+            yield(self.value)
+        } update: { yield in
+            yield(self.value)
+        } deactivate: {
+            self.deactivationCount += 1
         }
     }
 

@@ -116,6 +116,27 @@ import Testing
         #expect(source.cancellationCount == 1)
     }
 
+    @Test
+    func removingConnectedViewDeactivatesItsChannel() {
+        let source = TestValueSource(1)
+        let container = Container(source: source)
+        let probe = ValueProbe<Int>()
+        let host = makeTestHost(
+            UnobservedConditionalRoot(showValue: true, container: container, probe: probe)
+        )
+
+        #expect(source.deactivationCount == 0)
+
+        host.rootView = UnobservedConditionalRoot(
+            showValue: false,
+            container: container,
+            probe: probe
+        )
+        render(host)
+
+        #expect(source.deactivationCount == 1)
+    }
+
     @MainActor private struct Scope {
         let value: Connection<Int>
 
@@ -286,6 +307,23 @@ import Testing
             Group {
                 if showValue {
                     ValueReader(probe: probe)
+                }
+            }
+            .container(container, scope: \Container.scope)
+        }
+    }
+
+    @MainActor private struct UnobservedConditionalRoot: View {
+        let showValue: Bool
+
+        let container: Container
+
+        let probe: ValueProbe<Int>
+
+        @ViewBuilder var body: some View {
+            Group {
+                if showValue {
+                    UnobservedValueReader(probe: probe)
                 }
             }
             .container(container, scope: \Container.scope)

@@ -8,22 +8,74 @@
 import Combine
 
 private extension GenericConnection.Channel {
-    init<Updates: Publisher>(
-        valueSource: ValueSource,
+    static func observing(
+        activate: @escaping @MainActor (@escaping YieldValue) -> AnyCancellable,
+        setValue: SetValue?
+    ) -> Self {
+        var cancellation: AnyCancellable?
+
+        return Self(
+            activate: { yield in
+                cancellation?.cancel()
+                cancellation = activate(yield)
+            },
+            update: { _ in },
+            reconfigure: { _, _ in },
+            deactivate: {
+                cancellation?.cancel()
+                cancellation = nil
+            },
+            setValue: setValue
+        )
+    }
+
+    static func subject<SubjectValue>(
+        subject: CurrentValueSubject<SubjectValue, Never>,
+        map: @escaping @MainActor (SubjectValue) -> Connected.WrappedValue,
+        setValue: (@MainActor (Connected.WrappedValue) -> Void)?
+    ) -> Self {
+        Self.observing(
+            activate: { yield in
+                subject.sink { value in
+                    yield(map(value))
+                }
+            },
+            setValue: setValue
+        )
+    }
+
+    static func publisher<Updates: Publisher>(
+        initialValue: Connected.WrappedValue,
         updates: Updates,
         map: @escaping @MainActor (Updates.Output) -> Connected.WrappedValue,
         setValue: (@MainActor (Connected.WrappedValue) -> Void)?
-    ) where Updates.Failure == Never {
-        self.init(
-            valueSource: valueSource,
-            setValue: setValue,
-            observe: { receiveValue in
-                let cancellation = updates.sink { value in
-                    receiveValue(map(value))
+    ) -> Self where Updates.Failure == Never {
+        Self.observing(
+            activate: { yield in
+                yield(initialValue)
+                return updates.sink { value in
+                    yield(map(value))
                 }
-                return CancellationToken { cancellation.cancel() }
             },
-            updateConfiguration: { _ in }
+            setValue: setValue
+        )
+    }
+
+    static func publisher<Updates: Publisher>(
+        currentValue: @escaping @MainActor () -> Connected.WrappedValue,
+        updates: Updates,
+        map: @escaping @MainActor (Updates.Output) -> Connected.WrappedValue,
+        setValue: (@MainActor (Connected.WrappedValue) -> Void)?
+    ) -> Self where Updates.Failure == Never {
+        Self.observing(
+            activate: { yield in
+                let cancellation = updates.sink { value in
+                    yield(map(value))
+                }
+                yield(currentValue())
+                return cancellation
+            },
+            setValue: setValue
         )
     }
 }
@@ -34,9 +86,8 @@ extension GenericConnection where Configuration == Void {
         _ subject: CurrentValueSubject<WrappedValue, Never>
     ) -> Self where Connected == ReadOnlyConnectedValue<WrappedValue> {
         Self {
-            Channel(
-                valueSource: .current { subject.value },
-                updates: subject,
+            Channel.subject(
+                subject: subject,
                 map: { $0 },
                 setValue: nil
             )
@@ -48,9 +99,8 @@ extension GenericConnection where Configuration == Void {
         _ subject: CurrentValueSubject<WrappedValue, Never>
     ) -> Self where Connected == WritableConnectedValue<WrappedValue> {
         Self {
-            Channel(
-                valueSource: .current { subject.value },
-                updates: subject,
+            Channel.subject(
+                subject: subject,
                 map: { $0 },
                 setValue: { subject.send($0) }
             )
@@ -64,9 +114,8 @@ extension GenericConnection where Configuration == Void {
         set: @escaping @MainActor (WrappedValue) -> Void
     ) -> Self where Connected == WritableConnectedValue<WrappedValue> {
         Self {
-            Channel(
-                valueSource: .current { subject.value },
-                updates: subject,
+            Channel.subject(
+                subject: subject,
                 map: { $0 },
                 setValue: set
             )
@@ -79,9 +128,8 @@ extension GenericConnection where Configuration == Void {
         map: @escaping @MainActor (SubjectValue) -> WrappedValue
     ) -> Self where Connected == ReadOnlyConnectedValue<WrappedValue> {
         Self {
-            Channel(
-                valueSource: .current { map(subject.value) },
-                updates: subject,
+            Channel.subject(
+                subject: subject,
                 map: map,
                 setValue: nil
             )
@@ -96,9 +144,8 @@ extension GenericConnection where Configuration == Void {
         set: @escaping @MainActor (WrappedValue) -> Void
     ) -> Self where Connected == WritableConnectedValue<WrappedValue> {
         Self {
-            Channel(
-                valueSource: .current { map(subject.value) },
-                updates: subject,
+            Channel.subject(
+                subject: subject,
                 map: map,
                 setValue: set
             )
@@ -112,8 +159,8 @@ extension GenericConnection where Configuration == Void {
         initialValue: WrappedValue
     ) -> Self where Updates.Output == WrappedValue, Updates.Failure == Never, Connected == ReadOnlyConnectedValue<WrappedValue> {
         Self {
-            Channel(
-                valueSource: .initial(initialValue),
+            Channel.publisher(
+                initialValue: initialValue,
                 updates: publisher,
                 map: { $0 },
                 setValue: nil
@@ -129,8 +176,8 @@ extension GenericConnection where Configuration == Void {
         set: @escaping @MainActor (WrappedValue) -> Void
     ) -> Self where Updates.Output == WrappedValue, Updates.Failure == Never, Connected == WritableConnectedValue<WrappedValue> {
         Self {
-            Channel(
-                valueSource: .initial(initialValue),
+            Channel.publisher(
+                initialValue: initialValue,
                 updates: publisher,
                 map: { $0 },
                 setValue: set
@@ -145,8 +192,8 @@ extension GenericConnection where Configuration == Void {
         currentValue: @escaping @MainActor () -> WrappedValue
     ) -> Self where Updates.Output == WrappedValue, Updates.Failure == Never, Connected == ReadOnlyConnectedValue<WrappedValue> {
         Self {
-            Channel(
-                valueSource: .current(currentValue),
+            Channel.publisher(
+                currentValue: currentValue,
                 updates: publisher,
                 map: { $0 },
                 setValue: nil
@@ -162,8 +209,8 @@ extension GenericConnection where Configuration == Void {
         set: @escaping @MainActor (WrappedValue) -> Void
     ) -> Self where Updates.Output == WrappedValue, Updates.Failure == Never, Connected == WritableConnectedValue<WrappedValue> {
         Self {
-            Channel(
-                valueSource: .current(currentValue),
+            Channel.publisher(
+                currentValue: currentValue,
                 updates: publisher,
                 map: { $0 },
                 setValue: set
