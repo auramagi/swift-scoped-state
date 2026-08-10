@@ -151,20 +151,7 @@ extension GenericConnection {
                 let session = makeSession(configuration)
 
                 return WritableConnection.Session(
-                    activate: { yield in
-                        let activation = session.activate { update in
-                            switch update {
-                            case let .value(value):
-                                yield(.value(value))
-                            case .invalidate:
-                                yield(.invalidate)
-                            }
-                        }
-                        return (
-                            initialValue: activation.initialValue,
-                            cancellation: activation.cancellation
-                        )
-                    },
+                    activate: session.activate,
                     refresh: session.refresh,
                     reconfigure: session.reconfigure,
                     setValue: setValue

@@ -70,9 +70,7 @@ extension GenericConnection where Configuration == Void {
                 return (
                     initialValue: observation.read(),
                     cancellation: CancellationToken {
-                        MainActor.assumeIsolated {
-                            observation.cancel()
-                        }
+                        observation.cancel()
                     }
                 )
             } refresh: {
