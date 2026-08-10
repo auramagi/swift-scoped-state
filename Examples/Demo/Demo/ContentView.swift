@@ -550,6 +550,23 @@ struct ProductDetailSnapshot: Equatable {
     }
 }
 
-#Preview {
-    AppRootView()
+private struct AppDiagnosticsScopePreviewModifier: PreviewModifier {
+    static func makeSharedContext() -> AppContainer {
+        AppContainer()
+    }
+
+    func body(content: Content, context: AppContainer) -> some View {
+        content
+            .container(context, scope: \.diagnosticsScope)
+    }
+}
+
+extension PreviewTrait where T == Preview.ViewTraits {
+    fileprivate static var appDiagnosticsScope: Self {
+        .modifier(AppDiagnosticsScopePreviewModifier())
+    }
+}
+
+#Preview(traits: .appDiagnosticsScope) {
+    AppContainerDiagnostics()
 }
