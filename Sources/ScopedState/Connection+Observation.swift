@@ -8,17 +8,17 @@
 import Observation
 
 @MainActor private final class ObservationActivation<Value> {
-    let currentValue: @MainActor () -> Value
+    let currentValue: () -> Value
 
-    let invalidate: @MainActor () -> Void
+    let invalidate: () -> Void
 
     var isActive = true
 
     var isStale = false
 
     init(
-        currentValue: @escaping @MainActor () -> Value,
-        invalidate: @escaping @MainActor () -> Void
+        currentValue: @escaping () -> Value,
+        invalidate: @escaping () -> Void
     ) {
         self.currentValue = currentValue
         self.invalidate = invalidate
@@ -56,7 +56,7 @@ extension GenericConnection where Configuration == Void {
     ///
     /// Changes to tracked properties must be made on the main actor.
     public static func observation<WrappedValue>(
-        _ currentValue: @escaping @MainActor () -> WrappedValue
+        _ currentValue: @escaping () -> WrappedValue
     ) -> Connection<WrappedValue> {
         Connection<WrappedValue> {
             var activeObservation: ObservationActivation<WrappedValue>?

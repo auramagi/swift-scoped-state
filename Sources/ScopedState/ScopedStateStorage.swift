@@ -21,7 +21,7 @@ import Observation
     func setValue(
         _ value: Value,
         notifyingObservers: Bool,
-        valuesEqual: @MainActor (Value, Value) -> Bool
+        valuesEqual: (Value, Value) -> Bool
     ) {
         if let currentValue = state.value, valuesEqual(currentValue, value) {
             return

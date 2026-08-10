@@ -15,14 +15,14 @@
     }
 }
 
-private extension GenericConnection.Session {
+private extension ConnectionSession {
     static func observing<Observation>(
-        activate: @escaping @MainActor (@escaping YieldValue) -> (
-            initialValue: Connected.WrappedValue,
+        activate: @escaping (@escaping @MainActor (Value) -> Void) -> (
+            initialValue: Value,
             observation: Observation
         ),
         cancel: @escaping (Observation) -> Void,
-        reconfigure: @escaping @MainActor (Configuration) -> Void
+        reconfigure: @escaping (Configuration) -> Void
     ) -> Self {
         Self(
             activate: { yield in
@@ -34,20 +34,18 @@ private extension GenericConnection.Session {
                     }
                 )
             },
-            refresh: { nil },
-            reconfigure: reconfigure,
-            setValue: nil
+            reconfigure: reconfigure
         )
     }
 }
 
-extension GenericConnection.Session {
-    public init<WrappedValue, Observation>(
-        currentValue: @escaping @MainActor () -> WrappedValue,
-        observe: @escaping @MainActor (@escaping YieldValue) -> Observation,
+extension ConnectionSession {
+    public init<Observation>(
+        currentValue: @escaping () -> Value,
+        observe: @escaping (@escaping @MainActor (Value) -> Void) -> Observation,
         cancel: @escaping (Observation) -> Void,
-        reconfigure: @escaping @MainActor (Configuration) -> Void
-    ) where Connected == ReadOnlyConnectedValue<WrappedValue> {
+        reconfigure: @escaping (Configuration) -> Void
+    ) {
         self = Self.observing(
             activate: { yield in
                 let activation = ObservationActivation(state: ())
@@ -65,12 +63,12 @@ extension GenericConnection.Session {
     }
 }
 
-extension GenericConnection.Session where Configuration == Void {
-    public init<WrappedValue, Observation>(
-        initialValue: WrappedValue,
-        observe: @escaping @MainActor (@escaping YieldValue) -> Observation,
+extension ConnectionSession where Configuration == Void {
+    public init<Observation>(
+        initialValue: Value,
+        observe: @escaping (@escaping @MainActor (Value) -> Void) -> Observation,
         cancel: @escaping (Observation) -> Void
-    ) where Connected == ReadOnlyConnectedValue<WrappedValue> {
+    ) {
         self = Self.observing(
             activate: { yield in
                 let activation = ObservationActivation(state: initialValue)
@@ -89,11 +87,11 @@ extension GenericConnection.Session where Configuration == Void {
         )
     }
 
-    public init<WrappedValue, Observation>(
-        currentValue: @escaping @MainActor () -> WrappedValue,
-        observe: @escaping @MainActor (@escaping YieldValue) -> Observation,
+    public init<Observation>(
+        currentValue: @escaping () -> Value,
+        observe: @escaping (@escaping @MainActor (Value) -> Void) -> Observation,
         cancel: @escaping (Observation) -> Void
-    ) where Connected == ReadOnlyConnectedValue<WrappedValue> {
+    ) {
         self.init(
             currentValue: currentValue,
             observe: observe,
@@ -107,7 +105,7 @@ extension GenericConnection {
     /// Transforms every value delivered by this connection while preserving
     /// its configuration and lifecycle behavior.
     public func map<WrappedValue, MappedValue>(
-        _ transform: @escaping @MainActor (WrappedValue) -> MappedValue
+        _ transform: @escaping (WrappedValue) -> MappedValue
     ) -> GenericConnection<Configuration, ReadOnlyConnectedValue<MappedValue>> where Connected == ReadOnlyConnectedValue<WrappedValue> {
         typealias MappedConnection = GenericConnection<Configuration, ReadOnlyConnectedValue<MappedValue>>
 
@@ -142,7 +140,7 @@ extension GenericConnection {
 
     /// Adds a write operation to a read-only connection.
     public func set<WrappedValue>(
-        _ setValue: @escaping @MainActor (WrappedValue) -> Void
+        _ setValue: @escaping (WrappedValue) -> Void
     ) -> GenericConnection<Configuration, WritableConnectedValue<WrappedValue>> where Connected == ReadOnlyConnectedValue<WrappedValue> {
         typealias WritableConnection = GenericConnection<Configuration, WritableConnectedValue<WrappedValue>>
 

@@ -48,7 +48,7 @@ extension GenericConnection where Configuration == Void {
     /// current-value getter.
     public static func publisher<Updates: Publisher, WrappedValue>(
         _ publisher: Updates,
-        currentValue: @escaping @MainActor () -> WrappedValue
+        currentValue: @escaping () -> WrappedValue
     ) -> Connection<WrappedValue> where Updates.Output == WrappedValue, Updates.Failure == Never {
         Connection<WrappedValue> {
             .init(

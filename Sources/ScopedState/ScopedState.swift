@@ -10,7 +10,7 @@ import SwiftUI
 @MainActor @propertyWrapper public struct ScopedState<Scope, Configuration, Connected: ConnectedValue>: @MainActor DynamicProperty {
     private typealias Connection = GenericConnection<Configuration, Connected>
 
-    typealias ValuesEqual = @MainActor (
+    typealias ValuesEqual = (
         Connected.WrappedValue,
         Connected.WrappedValue
     ) -> Bool
@@ -67,7 +67,7 @@ import SwiftUI
             }
         }
 
-        private func makeYield(valuesEqual: @escaping ValuesEqual) -> Connection.Session.YieldUpdate {
+        private func makeYield(valuesEqual: @escaping ValuesEqual) -> Connection.Session.Yield {
             { [storage] update in
                 switch update {
                 case let .value(value):

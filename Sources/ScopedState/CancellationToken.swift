@@ -14,11 +14,9 @@ public final class CancellationToken {
     }
 
     public func cancel() {
-        guard let cancellation else {
-            return
-        }
+        let cancellation = self.cancellation
         self.cancellation = nil
-        cancellation()
+        cancellation?()
     }
 
     deinit {

@@ -25,7 +25,7 @@ extension GenericConnection where Configuration == Void {
     /// then receives values from an asynchronous sequence.
     /// The sequence expression is evaluated whenever observation starts.
     public static func async<Updates: AsyncSequence, WrappedValue>(
-        _ updates: @autoclosure @escaping @MainActor () -> Updates,
+        _ updates: @autoclosure @escaping () -> Updates,
         initialValue: WrappedValue
     ) -> Connection<WrappedValue> where Updates.Element == WrappedValue, Updates.Failure == Never {
         Connection<WrappedValue> {
@@ -41,8 +41,8 @@ extension GenericConnection where Configuration == Void {
     /// sequence and a synchronous current-value getter.
     /// The sequence expression is evaluated whenever observation starts.
     public static func async<Updates: AsyncSequence, WrappedValue>(
-        _ updates: @autoclosure @escaping @MainActor () -> Updates,
-        currentValue: @escaping @MainActor () -> WrappedValue
+        _ updates: @autoclosure @escaping () -> Updates,
+        currentValue: @escaping () -> WrappedValue
     ) -> Connection<WrappedValue> where Updates.Element == WrappedValue, Updates.Failure == Never {
         Connection<WrappedValue> {
             .init(
