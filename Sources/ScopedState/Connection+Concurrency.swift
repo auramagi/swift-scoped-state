@@ -20,22 +20,6 @@
 }
 
 @available(macOS 15.0, iOS 18.0, watchOS 11.0, tvOS 18.0, visionOS 2.0, *)
-private extension GenericConnection where Configuration == Void {
-    static func asyncSequence<Updates: AsyncSequence>(
-        _ updates: @escaping @MainActor () -> Updates,
-        currentValue: @escaping @MainActor () -> Updates.Element
-    ) -> Connection<Updates.Element> where Updates.Failure == Never {
-        Connection<Updates.Element>(
-            currentValue: currentValue,
-            observe: { yield in
-                observe(updates(), yield: yield)
-            },
-            cancel: { $0.cancel() }
-        )
-    }
-}
-
-@available(macOS 15.0, iOS 18.0, watchOS 11.0, tvOS 18.0, visionOS 2.0, *)
 extension GenericConnection where Configuration == Void {
     /// Creates a read-only connection that starts with an initial value and
     /// then receives values from an asynchronous sequence.
@@ -44,9 +28,10 @@ extension GenericConnection where Configuration == Void {
         _ updates: @autoclosure @escaping @MainActor () -> Updates,
         initialValue: WrappedValue
     ) -> Connection<WrappedValue> where Updates.Element == WrappedValue, Updates.Failure == Never {
-        Self.asyncSequence(
-            updates,
-            currentValue: { initialValue }
+        Connection<WrappedValue>(
+            initialValue: initialValue,
+            observe: { yield in observe(updates(), yield: yield) },
+            cancel: { $0.cancel() }
         )
     }
 
@@ -57,9 +42,10 @@ extension GenericConnection where Configuration == Void {
         _ updates: @autoclosure @escaping @MainActor () -> Updates,
         currentValue: @escaping @MainActor () -> WrappedValue
     ) -> Connection<WrappedValue> where Updates.Element == WrappedValue, Updates.Failure == Never {
-        Self.asyncSequence(
-            updates,
-            currentValue: currentValue
+        Connection<WrappedValue>(
+            currentValue: currentValue,
+            observe: { yield in observe(updates(), yield: yield) },
+            cancel: { $0.cancel() }
         )
     }
 }

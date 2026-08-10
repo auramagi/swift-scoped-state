@@ -30,6 +30,7 @@ import Testing
         #expect(source.updatedConfigurations.isEmpty)
         #expect(source.observationCount == 1)
 
+        let valueCountBeforeReconfiguration = probe.values.count
         host.rootView = ConfiguredRoot(
             container: container,
             configuration: 2,
@@ -38,11 +39,24 @@ import Testing
         render(host)
 
         #expect(probe.values.last == 2)
+        #expect(probe.values.count == valueCountBeforeReconfiguration + 1)
         #expect(container.scopeEvaluationCount == 1)
         #expect(source.createdConfigurations == [1])
         #expect(source.updatedConfigurations == [2])
         #expect(source.cancellationCount == 1)
         #expect(source.observationCount == 2)
+
+        let valueCountBeforeDelivery = probe.values.count
+        source.send(3)
+        render(host)
+
+        #expect(probe.values.last == 3)
+        #expect(probe.values.count == valueCountBeforeDelivery + 1)
+
+        source.send(3)
+        render(host)
+
+        #expect(probe.values.count == valueCountBeforeDelivery + 1)
     }
 
     @Test
@@ -57,8 +71,14 @@ import Testing
         #expect(container.scopeEvaluationCount == 1)
     }
 
-    @MainActor private struct ChildScope {
+    @MainActor private struct ChildScope: Equatable {
+        let identity: Int
+
         let value: Connection<Int>
+
+        nonisolated static func == (lhs: ChildScope, rhs: ChildScope) -> Bool {
+            lhs.identity == rhs.identity
+        }
     }
 
     @MainActor private struct ParentScope {
@@ -82,7 +102,7 @@ import Testing
 
         private(set) var cancellationCount = 0
 
-        private var currentScope = ChildScope(value: .constant(0))
+        private var currentScope = ChildScope(identity: 0, value: .constant(0))
 
         private var nextObservationID = 0
 
@@ -103,7 +123,7 @@ import Testing
         }
 
         private func scope(for configuration: Int) -> ChildScope {
-            ChildScope(value: .constant(configuration))
+            ChildScope(identity: configuration, value: .constant(configuration))
         }
 
         private func observe(_ receiveValue: @escaping ReceiveValue) -> Observation {
@@ -128,6 +148,13 @@ import Testing
                 receiveValue(currentScope)
             }
         }
+
+        func send(_ value: Int) {
+            currentScope = scope(for: value)
+            for receiveValue in observations.values {
+                receiveValue(currentScope)
+            }
+        }
     }
 
     @MainActor private final class Container {
@@ -143,7 +170,7 @@ import Testing
             scopeEvaluationCount += 1
             return ParentScope(
                 configuredChild: source.connection,
-                child: .constant(ChildScope(value: .constant(42)))
+                child: .constant(ChildScope(identity: 42, value: .constant(42)))
             )
         }
     }

@@ -10,6 +10,11 @@ import SwiftUI
 @MainActor @propertyWrapper public struct ScopedState<Scope, Configuration, Connected: ConnectedValue>: @MainActor DynamicProperty {
     private typealias Connection = GenericConnection<Configuration, Connected>
 
+    typealias ValuesEqual = @MainActor (
+        Connected.WrappedValue,
+        Connected.WrappedValue
+    ) -> Bool
+
     @MainActor private final class Coordinator {
         @MainActor struct Context {
             struct ConnectionIdentity: Equatable {
@@ -32,6 +37,8 @@ import SwiftUI
 
             let session: Connection.Session
 
+            let valuesEqual: ValuesEqual
+
             var configuration: Configuration
         }
 
@@ -42,29 +49,54 @@ import SwiftUI
         var value: Connected.WrappedValue {
             get { storage.requiredValue }
             set {
-                guard let session = context?.session else {
+                guard let context else {
                     preconditionFailure("Scoped state was written before DynamicProperty.update()")
                 }
 
-                if let setValue = session.setValue {
+                if let setValue = context.session.setValue {
                     setValue(newValue)
                 } else {
-                    storage.value = newValue
+                    storage.setValue(
+                        newValue,
+                        notifyingObservers: true,
+                        valuesEqual: context.valuesEqual
+                    )
                 }
             }
+        }
+
+        private func makeYield(valuesEqual: @escaping ValuesEqual) -> Connection.Session.YieldValue {
+            { [storage] in
+                storage.setValue(
+                    $0,
+                    notifyingObservers: true,
+                    valuesEqual: valuesEqual
+                )
+            }
+        }
+
+        private func install(
+            _ value: Connected.WrappedValue,
+            valuesEqual: ValuesEqual
+        ) {
+            storage.setValue(
+                value,
+                notifyingObservers: false,
+                valuesEqual: valuesEqual
+            )
         }
 
         func update(
             scopeStorage: ScopedStateStorage<Scope>,
             keyPath: KeyPath<Scope, Connection>,
-            configuration: Configuration
+            configuration: Configuration,
+            valuesEqual: @escaping ValuesEqual
         ) {
             let identity = Context.ConnectionIdentity(
                 scopeStorage: scopeStorage,
                 generation: scopeStorage.generation,
                 keyPath: keyPath
             )
-            let yield: Connection.Session.YieldValue = { [storage] in storage.value = $0 }
 
             if context?.identity != identity {
                 let connection = identity.scopeStorage.requiredValue[keyPath: identity.keyPath]
@@ -75,14 +107,27 @@ import SwiftUI
                     identity: identity,
                     connection: connection,
                     session: session,
+                    valuesEqual: valuesEqual,
                     configuration: configuration
                 )
-                session.activate(yield)
+                install(
+                    session.activate(makeYield(valuesEqual: valuesEqual)),
+                    valuesEqual: valuesEqual
+                )
             } else if let context, !context.connection.configurationsEqual(context.configuration, configuration) {
-                context.session.reconfigure(configuration, yield)
+                install(
+                    context.session.reconfigure(
+                        configuration,
+                        makeYield(valuesEqual: context.valuesEqual)
+                    ),
+                    valuesEqual: context.valuesEqual
+                )
                 self.context?.configuration = configuration
-            } else {
-                context?.session.update(yield)
+            } else if let context, let value = context.session.update() {
+                install(
+                    value,
+                    valuesEqual: context.valuesEqual
+                )
             }
         }
 
@@ -99,22 +144,67 @@ import SwiftUI
 
     private let configuration: Configuration
 
+    private let valuesEqual: ValuesEqual
+
+    init(
+        _ keyPath: KeyPath<Scope, GenericConnection<Configuration, Connected>>,
+        configuration: Configuration,
+        valuesEqual: @escaping ValuesEqual
+    ) {
+        self.keyPath = keyPath
+        self.configuration = configuration
+        self.valuesEqual = valuesEqual
+    }
+
     public init(
         _ keyPath: KeyPath<Scope, GenericConnection<Configuration, Connected>>,
         configuration: Configuration
     ) {
-        self.keyPath = keyPath
-        self.configuration = configuration
+        self.init(
+            keyPath,
+            configuration: configuration,
+            valuesEqual: { _, _ in false }
+        )
+    }
+
+    public init(
+        _ keyPath: KeyPath<Scope, GenericConnection<Configuration, Connected>>,
+        configuration: Configuration
+    ) where Connected.WrappedValue: Equatable {
+        self.init(
+            keyPath,
+            configuration: configuration,
+            valuesEqual: { $0 == $1 }
+        )
     }
 
     public init(
         _ keyPath: KeyPath<Scope, GenericConnection<Configuration, Connected>>
     ) where Configuration == Void {
-        self.init(keyPath, configuration: ())
+        self.init(
+            keyPath,
+            configuration: (),
+            valuesEqual: { _, _ in false }
+        )
+    }
+
+    public init(
+        _ keyPath: KeyPath<Scope, GenericConnection<Configuration, Connected>>
+    ) where Configuration == Void, Connected.WrappedValue: Equatable {
+        self.init(
+            keyPath,
+            configuration: (),
+            valuesEqual: { $0 == $1 }
+        )
     }
 
     public func update() {
-        coordinator.update(scopeStorage: scope, keyPath: keyPath, configuration: configuration)
+        coordinator.update(
+            scopeStorage: scope,
+            keyPath: keyPath,
+            configuration: configuration,
+            valuesEqual: valuesEqual
+        )
     }
 
     var storage: ScopedStateStorage<Connected.WrappedValue> {

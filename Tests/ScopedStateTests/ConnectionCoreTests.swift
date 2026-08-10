@@ -13,18 +13,17 @@ import Testing
     @Test
     func unconfiguredConnectionCanDefineItsSessionInline() {
         var writtenValues: [Int] = []
-        let connection = Connection<Int> { yield in
-            yield(1)
+        let connection = Connection<Int> { _ in
+            1
         }.set {
             writtenValues.append($0)
         }
         let session = connection.makeSession(())
 
-        var receivedValues: [Int] = []
-        session.activate { receivedValues.append($0) }
+        let currentValue = session.activate { _ in }
         session.setValue?(2)
 
-        #expect(receivedValues == [1])
+        #expect(currentValue == 1)
         #expect(writtenValues == [2])
     }
 
@@ -34,27 +33,23 @@ import Testing
             var value = 0
         }
 
-        let connection = Connection<Int> { [counter = Counter()] yield in
+        let connection = Connection<Int> { [counter = Counter()] _ in
             counter.value += 1
-            yield(counter.value)
+            return counter.value
         }
         let firstSession = connection.makeSession(())
         let secondSession = connection.makeSession(())
 
-        var firstValues: [Int] = []
-        var secondValues: [Int] = []
-        firstSession.activate { firstValues.append($0) }
-        firstSession.activate { firstValues.append($0) }
-        secondSession.activate { secondValues.append($0) }
-
-        #expect(firstValues == [1, 2])
-        #expect(secondValues == [1])
+        #expect(firstSession.activate { _ in } == 1)
+        #expect(firstSession.activate { _ in } == 2)
+        #expect(secondSession.activate { _ in } == 1)
     }
 
     @Test
     func writeRoutingIsAvailableToEverySession() {
         var writtenValues: [Int] = []
         let connection = Connection<Int> { _ in
+            0
         }.set {
             writtenValues.append($0)
         }
@@ -75,13 +70,8 @@ import Testing
         #expect(connection.configurationsEqual((), ()))
         #expect(session.setValue == nil)
 
-        var receivedValues: [Int] = []
-        let yield: Connection<Int>.Session.YieldValue = { receivedValues.append($0) }
-        session.activate(yield)
-        #expect(receivedValues == [42])
-
-        session.update(yield)
-        #expect(receivedValues == [42])
+        #expect(session.activate { _ in } == 42)
+        #expect(session.update() == nil)
 
         session.deactivate()
     }
@@ -94,11 +84,10 @@ import Testing
             .set { writtenValues.append($0) }
         let session = connection.makeSession(())
 
-        var receivedValues: [String] = []
-        session.activate { receivedValues.append($0) }
+        let currentValue = session.activate { _ in }
         session.setValue?("replacement")
 
-        #expect(receivedValues == ["42"])
+        #expect(currentValue == "42")
         #expect(writtenValues == ["replacement"])
     }
 }

@@ -19,16 +19,17 @@ import Testing
 
         #expect(session.setValue == nil)
 
-        var receivedValues: [Int] = []
-        session.activate { receivedValues.append($0) }
-        #expect(receivedValues == [1])
+        var deliveredValues: [Int] = []
+        let currentValue = session.activate { deliveredValues.append($0) }
+        #expect(currentValue == 1)
+        #expect(deliveredValues.isEmpty)
 
         subject.send(2)
-        #expect(receivedValues == [1, 2])
+        #expect(deliveredValues == [2])
 
         session.deactivate()
         subject.send(3)
-        #expect(receivedValues == [1, 2])
+        #expect(deliveredValues == [2])
     }
 
     @Test
@@ -41,7 +42,7 @@ import Testing
         #expect(setValue != nil)
 
         var receivedValues: [Int] = []
-        session.activate { receivedValues.append($0) }
+        receivedValues.append(session.activate { receivedValues.append($0) })
 
         setValue?(2)
         #expect(subject.value == 2)
@@ -62,7 +63,7 @@ import Testing
         #expect(setValue != nil)
 
         var receivedValues: [Int] = []
-        session.activate { receivedValues.append($0) }
+        receivedValues.append(session.activate { receivedValues.append($0) })
 
         setValue?(2)
         #expect(writtenValues == [2])
@@ -80,7 +81,7 @@ import Testing
         let session = connection.makeSession(())
 
         var receivedValues: [String] = []
-        session.activate { receivedValues.append($0) }
+        receivedValues.append(session.activate { receivedValues.append($0) })
         subject.send(3)
         #expect(receivedValues == ["value=2", "value=3"])
         session.deactivate()
@@ -99,7 +100,7 @@ import Testing
         #expect(setValue != nil)
 
         var receivedValues: [String] = []
-        session.activate { receivedValues.append($0) }
+        receivedValues.append(session.activate { receivedValues.append($0) })
         subject.send(3)
 
         setValue?("replacement")
@@ -110,24 +111,25 @@ import Testing
     }
 
     @Test
-    func publisherUsesInitialValueAndDeliversUpdates() {
+    func publisherUsesLatestSynchronousValueAndDeliversLaterUpdates() {
         let publisher = PassthroughSubject<Int, Never>()
         let connection: Connection<Int> = .publisher(
-            publisher,
+            publisher.prepend(2),
             initialValue: 1
         )
         let session = connection.makeSession(())
 
-        var receivedValues: [Int] = []
-        session.activate { receivedValues.append($0) }
-        #expect(receivedValues == [1])
+        var deliveredValues: [Int] = []
+        let currentValue = session.activate { deliveredValues.append($0) }
+        #expect(currentValue == 2)
+        #expect(deliveredValues.isEmpty)
 
-        publisher.send(2)
-        #expect(receivedValues == [1, 2])
+        publisher.send(3)
+        #expect(deliveredValues == [3])
 
         session.deactivate()
-        publisher.send(3)
-        #expect(receivedValues == [1, 2])
+        publisher.send(4)
+        #expect(deliveredValues == [3])
     }
 
     @Test
@@ -146,7 +148,7 @@ import Testing
         #expect(setValue != nil)
 
         var receivedValues: [Int] = []
-        session.activate { receivedValues.append($0) }
+        receivedValues.append(session.activate { receivedValues.append($0) })
 
         setValue?(2)
         publisher.send(3)
@@ -168,11 +170,11 @@ import Testing
         current = 2
 
         var receivedValues: [Int] = []
-        session.activate { receivedValues.append($0) }
+        receivedValues.append(session.activate { receivedValues.append($0) })
         #expect(receivedValues == [2])
 
         current = 3
-        session.update { receivedValues.append($0) }
+        #expect(session.update() == nil)
         #expect(receivedValues == [2])
 
         publisher.send(3)
@@ -196,7 +198,7 @@ import Testing
         #expect(setValue != nil)
 
         var receivedValues: [Int] = []
-        session.activate { receivedValues.append($0) }
+        receivedValues.append(session.activate { receivedValues.append($0) })
 
         setValue?(2)
         publisher.send(3)

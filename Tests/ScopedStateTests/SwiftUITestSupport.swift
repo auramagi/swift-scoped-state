@@ -68,10 +68,10 @@ import UIKit
     }
 
     var unobservedConnection: Connection<Value> {
-        Connection { yield in
-            yield(self.value)
-        } update: { yield in
-            yield(self.value)
+        Connection { _ in
+            self.value
+        } update: {
+            self.value
         } deactivate: {
             self.deactivationCount += 1
         }

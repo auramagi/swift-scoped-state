@@ -38,19 +38,27 @@ import Testing
 
         let source = try #require(sourceProbe.binding)
         #expect(source.wrappedValue == false)
+        let readOnlyCountBeforeSourceWrite = readOnlyProbe.values.count
+        let writableCountBeforeSourceWrite = writableProbe.values.count
         source.wrappedValue = true
         render(host)
 
         #expect(readOnlyProbe.values.last == true)
         #expect(writableProbe.values.last == true)
+        #expect(readOnlyProbe.values.count == readOnlyCountBeforeSourceWrite + 1)
+        #expect(writableProbe.values.count == writableCountBeforeSourceWrite + 1)
 
         let writable = try #require(writableProbe.binding)
+        let readOnlyCountBeforeConnectedWrite = readOnlyProbe.values.count
+        let writableCountBeforeConnectedWrite = writableProbe.values.count
         writable.wrappedValue = false
         render(host)
 
         #expect(source.wrappedValue == false)
         #expect(readOnlyProbe.values.last == false)
         #expect(writableProbe.values.last == false)
+        #expect(readOnlyProbe.values.count == readOnlyCountBeforeConnectedWrite + 1)
+        #expect(writableProbe.values.count == writableCountBeforeConnectedWrite + 1)
     }
 
     @MainActor private struct Scope {

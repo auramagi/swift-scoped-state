@@ -42,6 +42,7 @@ import Testing
 
         let replacementSource = TestValueSource(10)
         let replacementContainer = Container(source: replacementSource)
+        let valueCountBeforeReplacement = probe.values.count
         host.rootView = Root(
             container: replacementContainer,
             revision: 2,
@@ -50,6 +51,7 @@ import Testing
         render(host)
 
         #expect(probe.values.last == 10)
+        #expect(probe.values.count == valueCountBeforeReplacement + 1)
         #expect(container.scopeEvaluationCount == 1)
         #expect(replacementContainer.scopeEvaluationCount == 1)
         #expect(source.cancellationCount == 1)

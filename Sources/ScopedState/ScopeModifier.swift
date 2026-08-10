@@ -10,11 +10,8 @@ import SwiftUI
 @MainActor private struct ScopeModifier<ParentScope, Configuration, Connected: ConnectedValue>: ViewModifier {
     @ScopedState<ParentScope, Configuration, Connected> private var scope: Connected.WrappedValue
 
-    init(
-        keyPath: KeyPath<ParentScope, GenericConnection<Configuration, Connected>>,
-        configuration: Configuration
-    ) {
-        self._scope = ScopedState(keyPath, configuration: configuration)
+    init(scope: ScopedState<ParentScope, Configuration, Connected>) {
+        self._scope = scope
     }
 
     func body(content: Content) -> some View {
@@ -30,7 +27,13 @@ extension View {
     @MainActor public func scope<ParentScope, Connected: ConnectedValue>(
         _ keyPath: KeyPath<ParentScope, GenericConnection<Void, Connected>>
     ) -> some View {
-        scope(keyPath, configuration: ())
+        modifier(ScopeModifier(scope: ScopedState(keyPath)))
+    }
+
+    @MainActor public func scope<ParentScope, Connected: ConnectedValue>(
+        _ keyPath: KeyPath<ParentScope, GenericConnection<Void, Connected>>
+    ) -> some View where Connected.WrappedValue: Equatable {
+        modifier(ScopeModifier(scope: ScopedState(keyPath)))
     }
 
     /// Connects a configured scope at this point in the SwiftUI view tree. The live session
@@ -39,6 +42,13 @@ extension View {
         _ keyPath: KeyPath<ParentScope, GenericConnection<Configuration, Connected>>,
         configuration: Configuration
     ) -> some View {
-        modifier(ScopeModifier(keyPath: keyPath, configuration: configuration))
+        modifier(ScopeModifier(scope: ScopedState(keyPath, configuration: configuration)))
+    }
+
+    @MainActor public func scope<ParentScope, Configuration, Connected: ConnectedValue>(
+        _ keyPath: KeyPath<ParentScope, GenericConnection<Configuration, Connected>>,
+        configuration: Configuration
+    ) -> some View where Connected.WrappedValue: Equatable {
+        modifier(ScopeModifier(scope: ScopedState(keyPath, configuration: configuration)))
     }
 }

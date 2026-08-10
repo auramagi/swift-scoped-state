@@ -35,7 +35,11 @@ import SwiftUI
                 return
             }
 
-            storage.value = container[keyPath: keyPath]
+            storage.setValue(
+                container[keyPath: keyPath],
+                notifyingObservers: false,
+                valuesEqual: { _, _ in false }
+            )
             self.container = container
             self.keyPath = keyPath
         }
@@ -63,7 +67,11 @@ import SwiftUI
 
     init(container: Container, scope keyPath: KeyPath<Container, Scope>) {
         let storage = ScopedStateStorage<Scope>()
-        storage.value = container[keyPath: keyPath]
+        storage.setValue(
+            container[keyPath: keyPath],
+            notifyingObservers: false,
+            valuesEqual: { _, _ in false }
+        )
         self.scope = storage
     }
 

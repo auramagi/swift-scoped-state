@@ -67,6 +67,7 @@ import Testing
         #expect(probe.values.last == 1)
 
         source.value = 2
+        let valueCountBeforeRefresh = probe.values.count
         host.rootView = UnobservedRoot(
             container: container,
             revision: 1,
@@ -75,6 +76,7 @@ import Testing
         render(host)
 
         #expect(probe.values.last == 2)
+        #expect(probe.values.count == valueCountBeforeRefresh + 1)
         #expect(container.scopeEvaluationCount == 1)
     }
 
@@ -88,10 +90,17 @@ import Testing
 
         #expect(probe.values.last == 1)
 
+        let valueCountBeforeDelivery = probe.values.count
         container.updates.send(2)
         render(host)
 
         #expect(probe.values.last == 2)
+        #expect(probe.values.count == valueCountBeforeDelivery + 1)
+
+        container.updates.send(2)
+        render(host)
+
+        #expect(probe.values.count == valueCountBeforeDelivery + 1)
     }
 
     @Test

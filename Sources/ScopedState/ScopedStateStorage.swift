@@ -10,15 +10,34 @@ import Observation
 /// The observable value storage used both by connected properties and as the
 /// exact scope type stored in SwiftUI's environment.
 @MainActor @Observable final class ScopedStateStorage<Value> {
+    @ObservationIgnored
     private var state: (value: Value?, generation: UInt) = (nil, 0)
 
     var value: Value? {
-        get { state.value }
-        set { state = (newValue, state.generation &+ 1) }
+        access(keyPath: \.generation)
+        return state.value
+    }
+
+    func setValue(
+        _ value: Value,
+        notifyingObservers: Bool,
+        valuesEqual: @MainActor (Value, Value) -> Bool
+    ) {
+        if let currentValue = state.value, valuesEqual(currentValue, value) {
+            return
+        }
+
+        if notifyingObservers {
+            withMutation(keyPath: \.generation) {
+                state = (value, state.generation &+ 1)
+            }
+        } else {
+            state = (value, state.generation &+ 1)
+        }
     }
 
     var requiredValue: Value {
-        if let value = state.value {
+        if let value {
             value
         } else {
             preconditionFailure("Scoped state was read before DynamicProperty.update()")
@@ -26,6 +45,7 @@ import Observation
     }
 
     var generation: UInt {
-        state.generation
+        access(keyPath: \.generation)
+        return state.generation
     }
 }

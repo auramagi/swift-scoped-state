@@ -5,29 +5,110 @@
 //  Created by Mikhail Apurin on 2026-08-09.
 //
 
+import Observation
+import os
 import Testing
 @testable import ScopedState
 
 @Suite("Scoped state storage")
 @MainActor struct ScopedStateStorageTests {
     @Test
-    func storesValuesAndTracksEveryAssignment() {
+    func storesValuesAndTracksEveryInstallationAndDelivery() {
         let storage = ScopedStateStorage<Int>()
 
         #expect(storage.value == nil)
         #expect(storage.generation == 0)
 
-        storage.value = 1
+        storage.setValue(
+            1,
+            notifyingObservers: false,
+            valuesEqual: { _, _ in false }
+        )
         #expect(storage.requiredValue == 1)
         #expect(storage.generation == 1)
 
-        storage.value = 1
+        storage.setValue(
+            1,
+            notifyingObservers: false,
+            valuesEqual: { _, _ in false }
+        )
         #expect(storage.requiredValue == 1)
         #expect(storage.generation == 2)
 
-        storage.value = nil
-        #expect(storage.value == nil)
+        storage.setValue(
+            2,
+            notifyingObservers: true,
+            valuesEqual: { _, _ in false }
+        )
+        #expect(storage.requiredValue == 2)
         #expect(storage.generation == 3)
+    }
+
+    @Test
+    func installationsAreSilentAndDeliveriesNotifyOnlyForChangedValues() {
+        let storage = ScopedStateStorage<Int>()
+        storage.setValue(
+            1,
+            notifyingObservers: false,
+            valuesEqual: ==
+        )
+
+        let notificationCount = OSAllocatedUnfairLock(initialState: 0)
+        withObservationTracking {
+            _ = storage.value
+        } onChange: {
+            notificationCount.withLock { $0 += 1 }
+        }
+
+        storage.setValue(
+            2,
+            notifyingObservers: false,
+            valuesEqual: ==
+        )
+        #expect(storage.requiredValue == 2)
+        #expect(notificationCount.withLock { $0 } == 0)
+
+        storage.setValue(
+            2,
+            notifyingObservers: true,
+            valuesEqual: ==
+        )
+        #expect(storage.requiredValue == 2)
+        #expect(storage.generation == 2)
+        #expect(notificationCount.withLock { $0 } == 0)
+
+        storage.setValue(
+            3,
+            notifyingObservers: true,
+            valuesEqual: ==
+        )
+        #expect(storage.requiredValue == 3)
+        #expect(storage.generation == 3)
+        #expect(notificationCount.withLock { $0 } == 1)
+    }
+
+    @Test
+    func equalValuesDoNotReplaceTheStoredValue() {
+        struct Value {
+            let identity: Int
+
+            let revision: Int
+        }
+
+        let storage = ScopedStateStorage<Value>()
+        storage.setValue(
+            Value(identity: 1, revision: 1),
+            notifyingObservers: false,
+            valuesEqual: { $0.identity == $1.identity }
+        )
+        storage.setValue(
+            Value(identity: 1, revision: 2),
+            notifyingObservers: true,
+            valuesEqual: { $0.identity == $1.identity }
+        )
+
+        #expect(storage.requiredValue.revision == 1)
+        #expect(storage.generation == 1)
     }
 
     #if os(macOS)

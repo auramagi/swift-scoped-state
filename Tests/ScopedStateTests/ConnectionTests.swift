@@ -15,27 +15,26 @@ import Testing
         typealias Session = Connection<Int>.Session
 
         var events: [String] = []
-        let session = Session { yield in
+        let session = Session { _ in
             events.append("activate")
-            yield(1)
-        } update: { _ in
+            return 1
+        } update: {
             events.append("update")
+            return nil
         } reconfigure: { _, _ in
             events.append("reconfigure")
+            return 1
         } deactivate: {
             events.append("deactivate")
         }
 
         #expect(session.setValue == nil)
 
-        var receivedValues: [Int] = []
-        let yield: Session.YieldValue = { receivedValues.append($0) }
-        session.activate(yield)
-        session.update(yield)
-        session.reconfigure((), yield)
+        #expect(session.activate { _ in } == 1)
+        #expect(session.update() == nil)
+        #expect(session.reconfigure(()) { _ in } == 1)
         session.deactivate()
 
-        #expect(receivedValues == [1])
         #expect(events == ["activate", "update", "reconfigure", "deactivate"])
     }
 
@@ -45,6 +44,7 @@ import Testing
 
         var writtenValues: [Int] = []
         let session = Session { _ in
+            0
         } setValue: {
             writtenValues.append($0)
         }
@@ -64,19 +64,17 @@ import Testing
         typealias ConfiguredConnection = Connection<Int>.Configuration<String>
 
         let connection = ConfiguredConnection { configuration in
-            ConfiguredConnection.Session { yield in
-                yield(configuration.count)
+            ConfiguredConnection.Session { _ in
+                configuration.count
             } reconfigure: { _, _ in
+                configuration.count
             }
         }
 
         #expect(connection.configurationsEqual("same", "same"))
         #expect(!connection.configurationsEqual("short", "longer"))
-
         let session = connection.makeSession("value")
-        var receivedValues: [Int] = []
-        session.activate { receivedValues.append($0) }
-        #expect(receivedValues == [5])
+        #expect(session.activate { _ in } == 5)
     }
 
     @Test
@@ -88,8 +86,10 @@ import Testing
         let connection = ConfiguredConnection(
             makeSession: { _ in
                 ConfiguredConnection.Session { _ in
+                    0
                 } reconfigure: { configuration, _ in
                     updatedConfigurations.append(configuration)
+                    return 0
                 }
             },
             configurationsEqual: { lhs, rhs in
@@ -104,7 +104,7 @@ import Testing
         #expect(comparisons[0].1 == "value")
 
         let session = connection.makeSession("initial")
-        session.reconfigure("updated") { _ in }
+        _ = session.reconfigure("updated") { _ in }
         #expect(updatedConfigurations == ["updated"])
     }
 
@@ -145,18 +145,16 @@ import Testing
 
         var readOnlyValues: [Int] = []
         var writableValues: [Int] = []
-        let yieldReadOnly: Connection<Int>.Session.YieldValue = { readOnlyValues.append($0) }
-        let yieldWritable: Connection<Int>.Writable.Session.YieldValue = { writableValues.append($0) }
-        readOnlySession.activate(yieldReadOnly)
-        writableSession.activate(yieldWritable)
+        readOnlyValues.append(readOnlySession.activate { readOnlyValues.append($0) })
+        writableValues.append(writableSession.activate { writableValues.append($0) })
 
         #expect(readOnlyValues == [1])
         #expect(writableValues == [1])
         #expect(observationCount == 2)
 
         currentValue = 2
-        readOnlySession.update(yieldReadOnly)
-        writableSession.update(yieldWritable)
+        #expect(readOnlySession.update() == nil)
+        #expect(writableSession.update() == nil)
         #expect(readOnlyValues == [1])
         #expect(writableValues == [1])
 
@@ -169,18 +167,36 @@ import Testing
     }
 
     @Test
+    func synchronousObservationValuesDoNotBecomeDeliveries() {
+        let connection = Connection<Int>(
+            currentValue: { 2 },
+            observe: { yield in
+                yield(1)
+            },
+            cancel: { _ in }
+        )
+        let session = connection.makeSession(())
+        var deliveredValues: [Int] = []
+
+        let currentValue = session.activate { deliveredValues.append($0) }
+
+        #expect(currentValue == 2)
+        #expect(deliveredValues.isEmpty)
+    }
+
+    @Test
     func mapTransformsLifecycleValuesAndPreservesConfigurationSemantics() {
         typealias SourceConnection = Connection<Int>.Configuration<String>
 
         var deactivationCount = 0
         let source = SourceConnection(
             makeSession: { configuration in
-                SourceConnection.Session { yield in
-                    yield(configuration.count)
-                } update: { yield in
-                    yield(2)
-                } reconfigure: { configuration, yield in
-                    yield(configuration.count)
+                SourceConnection.Session { _ in
+                    configuration.count
+                } update: {
+                    2
+                } reconfigure: { configuration, _ in
+                    configuration.count
                 } deactivate: {
                     deactivationCount += 1
                 }
@@ -191,17 +207,11 @@ import Testing
         let session = mapped.makeSession("initial")
 
         #expect(mapped.configurationsEqual("VALUE", "value"))
-
-        var receivedValues: [String] = []
-        let yield: Connection<String>.Configuration<String>.Session.YieldValue = {
-            receivedValues.append($0)
-        }
-        session.activate(yield)
-        session.update(yield)
-        session.reconfigure("updated", yield)
+        #expect(session.activate { _ in } == "value=7")
+        #expect(session.update() == "value=2")
+        #expect(session.reconfigure("updated") { _ in } == "value=7")
         session.deactivate()
 
-        #expect(receivedValues == ["value=7", "value=2", "value=7"])
         #expect(deactivationCount == 1)
     }
 
@@ -223,14 +233,13 @@ import Testing
             reconfigure: { updatedConfigurations.append($0) }
         )
 
-        var receivedValues: [Int] = []
-        let yield: ConfiguredSession.YieldValue = { receivedValues.append($0) }
-        session.activate(yield)
+        let initialValue = session.activate { _ in }
 
         currentValue = 2
-        session.reconfigure("updated", yield)
+        let updatedValue = session.reconfigure("updated") { _ in }
 
-        #expect(receivedValues == [1, 2])
+        #expect(initialValue == 1)
+        #expect(updatedValue == 2)
         #expect(updatedConfigurations == ["updated"])
         #expect(observationCount == 2)
         #expect(cancellationCount == 1)

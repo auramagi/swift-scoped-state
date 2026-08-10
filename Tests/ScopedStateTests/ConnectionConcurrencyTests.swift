@@ -25,10 +25,13 @@ import Testing
             initialValue: 1
         )
         let session = connection.makeSession(())
+
         let (receivedValues, receivedValuesContinuation) = AsyncStream.makeStream(of: Int.self)
         var receivedValuesIterator = receivedValues.makeAsyncIterator()
 
-        session.activate { receivedValuesContinuation.yield($0) }
+        receivedValuesContinuation.yield(
+            session.activate { receivedValuesContinuation.yield($0) }
+        )
         #expect(await receivedValuesIterator.next() == 1)
 
         updatesContinuation.yield(2)
@@ -58,7 +61,9 @@ import Testing
         var receivedValuesIterator = receivedValues.makeAsyncIterator()
 
         currentValue.value = 2
-        session.activate { receivedValuesContinuation.yield($0) }
+        receivedValuesContinuation.yield(
+            session.activate { receivedValuesContinuation.yield($0) }
+        )
         #expect(await receivedValuesIterator.next() == "value=2")
 
         updatesContinuation.yield(3)
@@ -81,7 +86,9 @@ import Testing
         let (receivedValues, receivedValuesContinuation) = AsyncStream.makeStream(of: Int.self)
         var receivedValuesIterator = receivedValues.makeAsyncIterator()
 
-        session.activate { receivedValuesContinuation.yield($0) }
+        receivedValuesContinuation.yield(
+            session.activate { receivedValuesContinuation.yield($0) }
+        )
         #expect(await receivedValuesIterator.next() == 1)
 
         session.setValue?(2)
@@ -111,10 +118,10 @@ import Testing
         )
         let session = connection.makeSession(())
 
-        session.activate { _ in }
+        _ = session.activate { _ in }
         #expect(source.observationCount == 1)
 
-        session.activate { _ in }
+        _ = session.activate { _ in }
         #expect(source.observationCount == 2)
         session.deactivate()
     }

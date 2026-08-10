@@ -19,13 +19,17 @@ extension Connection {
     /// implementation.
     /// Its closures retain any implementation object needed to keep the value alive.
     @MainActor public struct Session {
+        /// Delivers values produced after the active lifecycle operation returns.
         public typealias YieldValue = @MainActor (Connected.WrappedValue) -> Void
 
-        public typealias Activate = @MainActor (@escaping YieldValue) -> Void
+        /// Starts observation and returns the synchronously resolved current value.
+        public typealias Activate = @MainActor (@escaping YieldValue) -> Connected.WrappedValue
 
-        public typealias Update = @MainActor (@escaping YieldValue) -> Void
+        /// Optionally refreshes the current value without delivering an update.
+        public typealias Update = @MainActor () -> Connected.WrappedValue?
 
-        public typealias Reconfigure = @MainActor (Configuration, @escaping YieldValue) -> Void
+        /// Replaces the configuration and returns its synchronous current value.
+        public typealias Reconfigure = @MainActor (Configuration, @escaping YieldValue) -> Connected.WrappedValue
 
         public typealias Deactivate = @MainActor () -> Void
 
@@ -58,7 +62,7 @@ extension Connection {
 extension GenericConnection.Session {
     public init<WrappedValue>(
         activate: @escaping Activate,
-        update: @escaping Update = { _ in },
+        update: @escaping Update = { nil },
         reconfigure: @escaping Reconfigure,
         deactivate: @escaping Deactivate = {}
     ) where Connected == ReadOnlyConnectedValue<WrappedValue> {
@@ -71,7 +75,7 @@ extension GenericConnection.Session {
 
     public init<WrappedValue>(
         activate: @escaping Activate,
-        update: @escaping Update = { _ in },
+        update: @escaping Update = { nil },
         reconfigure: @escaping Reconfigure,
         deactivate: @escaping Deactivate = {},
         setValue: @escaping SetValue
@@ -87,27 +91,27 @@ extension GenericConnection.Session {
 extension GenericConnection.Session where Configuration == Void {
     public init<WrappedValue>(
         activate: @escaping Activate,
-        update: @escaping Update = { _ in },
+        update: @escaping Update = { nil },
         deactivate: @escaping Deactivate = {}
     ) where Connected == ReadOnlyConnectedValue<WrappedValue> {
         self.init(
             activate: activate,
             update: update,
-            reconfigure: { _, _ in },
+            reconfigure: { _, yield in activate(yield) },
             deactivate: deactivate
         )
     }
 
     public init<WrappedValue>(
         activate: @escaping Activate,
-        update: @escaping Update = { _ in },
+        update: @escaping Update = { nil },
         deactivate: @escaping Deactivate = {},
         setValue: @escaping SetValue
     ) where Connected == WritableConnectedValue<WrappedValue> {
         self.init(
             activate: activate,
             update: update,
-            reconfigure: { _, _ in },
+            reconfigure: { _, yield in activate(yield) },
             deactivate: deactivate,
             setValue: setValue
         )
