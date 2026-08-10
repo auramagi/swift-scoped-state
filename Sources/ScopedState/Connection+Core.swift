@@ -169,22 +169,6 @@ extension GenericConnection {
 }
 
 extension GenericConnection where Configuration == Void {
-    /// Creates an unconfigured connection whose operations' capture-list state
-    /// is recreated for every session.
-    public init<WrappedValue>(
-        activate: @autoclosure @escaping @MainActor () -> Session.Activate,
-        update: @autoclosure @escaping @MainActor () -> Session.Update = ({ nil } as Session.Update),
-        deactivate: @autoclosure @escaping @MainActor () -> Session.Deactivate = ({} as Session.Deactivate)
-    ) where Connected == ReadOnlyConnectedValue<WrappedValue> {
-        self.init {
-            Session(
-                activate: activate(),
-                update: update(),
-                deactivate: deactivate()
-            )
-        }
-    }
-
     public init<WrappedValue, Observation>(
         initialValue: WrappedValue,
         observe: @escaping @MainActor (@escaping Session.YieldValue) -> Observation,
@@ -217,8 +201,8 @@ extension GenericConnection where Configuration == Void {
     public static func constant<WrappedValue>(
         _ value: WrappedValue
     ) -> Connection<WrappedValue> {
-        Connection<WrappedValue> { _ in
-            value
+        Connection<WrappedValue> {
+            .init { _ in value }
         }
     }
 }

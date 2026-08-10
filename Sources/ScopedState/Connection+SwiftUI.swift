@@ -12,10 +12,12 @@ extension GenericConnection where Configuration == Void {
     public static func binding<WrappedValue>(
         _ binding: Binding<WrappedValue>
     ) -> Connection<WrappedValue> {
-        Connection<WrappedValue> { _ in
-            binding.wrappedValue
-        } update: {
-            binding.wrappedValue
+        Connection<WrappedValue> {
+            .init { _ in
+                binding.wrappedValue
+            } update: {
+                binding.wrappedValue
+            }
         }
     }
 

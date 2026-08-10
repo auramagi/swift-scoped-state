@@ -68,12 +68,14 @@ import UIKit
     }
 
     var unobservedConnection: Connection<Value> {
-        Connection { _ in
-            self.value
-        } update: {
-            self.value
-        } deactivate: {
-            self.deactivationCount += 1
+        Connection {
+            .init { _ in
+                self.value
+            } update: {
+                self.value
+            } deactivate: {
+                self.deactivationCount += 1
+            }
         }
     }
 

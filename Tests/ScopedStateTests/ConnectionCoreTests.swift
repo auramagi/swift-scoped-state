@@ -11,46 +11,9 @@ import Testing
 @Suite("Core connections")
 @MainActor struct ConnectionCoreTests {
     @Test
-    func unconfiguredConnectionCanDefineItsSessionInline() {
-        var writtenValues: [Int] = []
-        let connection = Connection<Int> { _ in
-            1
-        }.set {
-            writtenValues.append($0)
-        }
-        let session = connection.makeSession(())
-
-        let currentValue = session.activate { _ in }
-        session.setValue?(2)
-
-        #expect(currentValue == 1)
-        #expect(writtenValues == [2])
-    }
-
-    @Test
-    func inlineOperationStateIsIndependentBetweenSessions() {
-        final class Counter {
-            var value = 0
-        }
-
-        let connection = Connection<Int> { [counter = Counter()] _ in
-            counter.value += 1
-            return counter.value
-        }
-        let firstSession = connection.makeSession(())
-        let secondSession = connection.makeSession(())
-
-        #expect(firstSession.activate { _ in } == 1)
-        #expect(firstSession.activate { _ in } == 2)
-        #expect(secondSession.activate { _ in } == 1)
-    }
-
-    @Test
     func writeRoutingIsAvailableToEverySession() {
         var writtenValues: [Int] = []
-        let connection = Connection<Int> { _ in
-            0
-        }.set {
+        let connection = Connection<Int>.constant(0).set {
             writtenValues.append($0)
         }
         let firstSession = connection.makeSession(())
