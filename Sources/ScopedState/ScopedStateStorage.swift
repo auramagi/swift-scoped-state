@@ -14,7 +14,7 @@ import Observation
     private var state: (value: Value?, generation: UInt) = (nil, 0)
 
     var value: Value? {
-        access(keyPath: \.generation)
+        access(keyPath: \.state)
         return state.value
     }
 
@@ -28,7 +28,7 @@ import Observation
         }
 
         if notifyingObservers {
-            withMutation(keyPath: \.generation) {
+            withMutation(keyPath: \.state) {
                 state = (value, state.generation &+ 1)
             }
         } else {
@@ -45,7 +45,7 @@ import Observation
     }
 
     var generation: UInt {
-        access(keyPath: \.generation)
+        access(keyPath: \.state)
         return state.generation
     }
 }
