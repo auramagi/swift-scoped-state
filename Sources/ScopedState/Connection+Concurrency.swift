@@ -28,11 +28,13 @@ extension GenericConnection where Configuration == Void {
         _ updates: @autoclosure @escaping @MainActor () -> Updates,
         initialValue: WrappedValue
     ) -> Connection<WrappedValue> where Updates.Element == WrappedValue, Updates.Failure == Never {
-        Connection<WrappedValue>(
-            initialValue: initialValue,
-            observe: { yield in observe(updates(), yield: yield) },
-            cancel: { $0.cancel() }
-        )
+        Connection<WrappedValue> {
+            .init(
+                initialValue: initialValue,
+                observe: { yield in observe(updates(), yield: yield) },
+                cancel: { $0.cancel() }
+            )
+        }
     }
 
     /// Creates a read-only connection backed by an asynchronous
@@ -42,10 +44,12 @@ extension GenericConnection where Configuration == Void {
         _ updates: @autoclosure @escaping @MainActor () -> Updates,
         currentValue: @escaping @MainActor () -> WrappedValue
     ) -> Connection<WrappedValue> where Updates.Element == WrappedValue, Updates.Failure == Never {
-        Connection<WrappedValue>(
-            currentValue: currentValue,
-            observe: { yield in observe(updates(), yield: yield) },
-            cancel: { $0.cancel() }
-        )
+        Connection<WrappedValue> {
+            .init(
+                currentValue: currentValue,
+                observe: { yield in observe(updates(), yield: yield) },
+                cancel: { $0.cancel() }
+            )
+        }
     }
 }

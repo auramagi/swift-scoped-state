@@ -33,10 +33,8 @@ import Testing
         #expect(connection.configurationsEqual((), ()))
         #expect(session.setValue == nil)
 
-        #expect(session.activate { _ in } == 42)
+        #expect(session.activate { _ in }.initialValue == 42)
         #expect(session.update() == nil)
-
-        session.deactivate()
     }
 
     @Test
@@ -47,10 +45,10 @@ import Testing
             .set { writtenValues.append($0) }
         let session = connection.makeSession(())
 
-        let currentValue = session.activate { _ in }
+        let activation = session.activate { _ in }
         session.setValue?("replacement")
 
-        #expect(currentValue == "42")
+        #expect(activation.initialValue == "42")
         #expect(writtenValues == ["replacement"])
     }
 }

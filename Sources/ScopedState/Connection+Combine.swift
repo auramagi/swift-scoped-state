@@ -12,11 +12,13 @@ extension GenericConnection where Configuration == Void {
     public static func subject<WrappedValue>(
         _ subject: CurrentValueSubject<WrappedValue, Never>
     ) -> Connection<WrappedValue> {
-        Connection<WrappedValue>(
-            currentValue: { subject.value },
-            observe: { subject.sink(receiveValue: $0) },
-            cancel: { $0.cancel() }
-        )
+        Connection<WrappedValue> {
+            .init(
+                currentValue: { subject.value },
+                observe: { subject.sink(receiveValue: $0) },
+                cancel: { $0.cancel() }
+            )
+        }
     }
 
     /// Creates a writable connection to a current-value subject.
@@ -33,11 +35,13 @@ extension GenericConnection where Configuration == Void {
         _ publisher: Updates,
         initialValue: WrappedValue
     ) -> Connection<WrappedValue> where Updates.Output == WrappedValue, Updates.Failure == Never {
-        Connection<WrappedValue>(
-            initialValue: initialValue,
-            observe: { publisher.sink(receiveValue: $0) },
-            cancel: { $0.cancel() }
-        )
+        Connection<WrappedValue> {
+            .init(
+                initialValue: initialValue,
+                observe: { publisher.sink(receiveValue: $0) },
+                cancel: { $0.cancel() }
+            )
+        }
     }
 
     /// Creates a read-only connection backed by a publisher and a synchronous
@@ -46,10 +50,12 @@ extension GenericConnection where Configuration == Void {
         _ publisher: Updates,
         currentValue: @escaping @MainActor () -> WrappedValue
     ) -> Connection<WrappedValue> where Updates.Output == WrappedValue, Updates.Failure == Never {
-        Connection<WrappedValue>(
-            currentValue: currentValue,
-            observe: { publisher.sink(receiveValue: $0) },
-            cancel: { $0.cancel() }
-        )
+        Connection<WrappedValue> {
+            .init(
+                currentValue: currentValue,
+                observe: { publisher.sink(receiveValue: $0) },
+                cancel: { $0.cancel() }
+            )
+        }
     }
 }

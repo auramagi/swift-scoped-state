@@ -37,6 +37,8 @@ import SwiftUI
 
             let session: Connection.Session
 
+            var cancellation: CancellationToken?
+
             let valuesEqual: ValuesEqual
 
             var configuration: Configuration
@@ -102,27 +104,32 @@ import SwiftUI
                 let connection = identity.scopeStorage.requiredValue[keyPath: identity.keyPath]
                 let session = connection.makeSession(configuration)
 
-                context?.session.deactivate()
+                context?.cancellation?.cancel()
+                let activation = session.activate(makeYield(valuesEqual: valuesEqual))
                 context = Context(
                     identity: identity,
                     connection: connection,
                     session: session,
+                    cancellation: activation.cancellation,
                     valuesEqual: valuesEqual,
                     configuration: configuration
                 )
                 install(
-                    session.activate(makeYield(valuesEqual: valuesEqual)),
+                    activation.initialValue,
                     valuesEqual: valuesEqual
                 )
             } else if let context, !context.connection.configurationsEqual(context.configuration, configuration) {
+                context.cancellation?.cancel()
+                context.session.reconfigure(configuration)
+                let activation = context.session.activate(
+                    makeYield(valuesEqual: context.valuesEqual)
+                )
+                self.context?.cancellation = activation.cancellation
+                self.context?.configuration = configuration
                 install(
-                    context.session.reconfigure(
-                        configuration,
-                        makeYield(valuesEqual: context.valuesEqual)
-                    ),
+                    activation.initialValue,
                     valuesEqual: context.valuesEqual
                 )
-                self.context?.configuration = configuration
             } else if let context, let value = context.session.update() {
                 install(
                     value,
@@ -132,7 +139,7 @@ import SwiftUI
         }
 
         isolated deinit {
-            context?.session.deactivate()
+            context?.cancellation?.cancel()
         }
     }
 

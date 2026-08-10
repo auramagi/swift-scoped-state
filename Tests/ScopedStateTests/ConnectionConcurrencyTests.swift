@@ -12,7 +12,7 @@ import Testing
 @MainActor struct ConnectionConcurrencyTests {
     @Test
     @available(macOS 15.0, iOS 18.0, watchOS 11.0, tvOS 18.0, visionOS 2.0, *)
-    func sequenceProvidesInitialAndSubsequentValuesAndCancelsOnDeactivation() async {
+    func sequenceProvidesInitialAndSubsequentValuesAndCancelsWithItsActivation() async {
         let (updates, updatesContinuation) = AsyncStream.makeStream(of: Int.self)
         let (termination, terminationContinuation) = AsyncStream.makeStream(of: Void.self)
         updatesContinuation.onTermination = { _ in
@@ -29,9 +29,8 @@ import Testing
         let (receivedValues, receivedValuesContinuation) = AsyncStream.makeStream(of: Int.self)
         var receivedValuesIterator = receivedValues.makeAsyncIterator()
 
-        receivedValuesContinuation.yield(
-            session.activate { receivedValuesContinuation.yield($0) }
-        )
+        let activation = session.activate { receivedValuesContinuation.yield($0) }
+        receivedValuesContinuation.yield(activation.initialValue)
         #expect(await receivedValuesIterator.next() == 1)
 
         updatesContinuation.yield(2)
@@ -39,7 +38,7 @@ import Testing
 
         var terminationIterator = termination.makeAsyncIterator()
         await Task.yield()
-        session.deactivate()
+        activation.cancellation?.cancel()
         #expect(await terminationIterator.next() != nil)
     }
 
@@ -61,14 +60,13 @@ import Testing
         var receivedValuesIterator = receivedValues.makeAsyncIterator()
 
         currentValue.value = 2
-        receivedValuesContinuation.yield(
-            session.activate { receivedValuesContinuation.yield($0) }
-        )
+        let activation = session.activate { receivedValuesContinuation.yield($0) }
+        receivedValuesContinuation.yield(activation.initialValue)
         #expect(await receivedValuesIterator.next() == "value=2")
 
         updatesContinuation.yield(3)
         #expect(await receivedValuesIterator.next() == "value=3")
-        session.deactivate()
+        activation.cancellation?.cancel()
     }
 
     @Test
@@ -86,9 +84,8 @@ import Testing
         let (receivedValues, receivedValuesContinuation) = AsyncStream.makeStream(of: Int.self)
         var receivedValuesIterator = receivedValues.makeAsyncIterator()
 
-        receivedValuesContinuation.yield(
-            session.activate { receivedValuesContinuation.yield($0) }
-        )
+        let activation = session.activate { receivedValuesContinuation.yield($0) }
+        receivedValuesContinuation.yield(activation.initialValue)
         #expect(await receivedValuesIterator.next() == 1)
 
         session.setValue?(2)
@@ -96,7 +93,7 @@ import Testing
 
         updatesContinuation.yield(3)
         #expect(await receivedValuesIterator.next() == 3)
-        session.deactivate()
+        activation.cancellation?.cancel()
     }
 
     @Test
@@ -118,11 +115,12 @@ import Testing
         )
         let session = connection.makeSession(())
 
-        _ = session.activate { _ in }
+        let firstActivation = session.activate { _ in }
         #expect(source.observationCount == 1)
 
-        _ = session.activate { _ in }
+        firstActivation.cancellation?.cancel()
+        let secondActivation = session.activate { _ in }
         #expect(source.observationCount == 2)
-        session.deactivate()
+        secondActivation.cancellation?.cancel()
     }
 }

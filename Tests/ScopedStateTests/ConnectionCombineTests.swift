@@ -20,14 +20,14 @@ import Testing
         #expect(session.setValue == nil)
 
         var deliveredValues: [Int] = []
-        let currentValue = session.activate { deliveredValues.append($0) }
-        #expect(currentValue == 1)
+        let activation = session.activate { deliveredValues.append($0) }
+        #expect(activation.initialValue == 1)
         #expect(deliveredValues.isEmpty)
 
         subject.send(2)
         #expect(deliveredValues == [2])
 
-        session.deactivate()
+        activation.cancellation?.cancel()
         subject.send(3)
         #expect(deliveredValues == [2])
     }
@@ -42,12 +42,13 @@ import Testing
         #expect(setValue != nil)
 
         var receivedValues: [Int] = []
-        receivedValues.append(session.activate { receivedValues.append($0) })
+        let activation = session.activate { receivedValues.append($0) }
+        receivedValues.append(activation.initialValue)
 
         setValue?(2)
         #expect(subject.value == 2)
         #expect(receivedValues == [1, 2])
-        session.deactivate()
+        activation.cancellation?.cancel()
     }
 
     @Test
@@ -63,13 +64,14 @@ import Testing
         #expect(setValue != nil)
 
         var receivedValues: [Int] = []
-        receivedValues.append(session.activate { receivedValues.append($0) })
+        let activation = session.activate { receivedValues.append($0) }
+        receivedValues.append(activation.initialValue)
 
         setValue?(2)
         #expect(writtenValues == [2])
         #expect(subject.value == 1)
         #expect(receivedValues == [1])
-        session.deactivate()
+        activation.cancellation?.cancel()
     }
 
     @Test
@@ -81,10 +83,11 @@ import Testing
         let session = connection.makeSession(())
 
         var receivedValues: [String] = []
-        receivedValues.append(session.activate { receivedValues.append($0) })
+        let activation = session.activate { receivedValues.append($0) }
+        receivedValues.append(activation.initialValue)
         subject.send(3)
         #expect(receivedValues == ["value=2", "value=3"])
-        session.deactivate()
+        activation.cancellation?.cancel()
     }
 
     @Test
@@ -100,14 +103,15 @@ import Testing
         #expect(setValue != nil)
 
         var receivedValues: [String] = []
-        receivedValues.append(session.activate { receivedValues.append($0) })
+        let activation = session.activate { receivedValues.append($0) }
+        receivedValues.append(activation.initialValue)
         subject.send(3)
 
         setValue?("replacement")
         #expect(writtenValues == ["replacement"])
         #expect(subject.value == 3)
         #expect(receivedValues == ["value=2", "value=3"])
-        session.deactivate()
+        activation.cancellation?.cancel()
     }
 
     @Test
@@ -120,14 +124,14 @@ import Testing
         let session = connection.makeSession(())
 
         var deliveredValues: [Int] = []
-        let currentValue = session.activate { deliveredValues.append($0) }
-        #expect(currentValue == 2)
+        let activation = session.activate { deliveredValues.append($0) }
+        #expect(activation.initialValue == 2)
         #expect(deliveredValues.isEmpty)
 
         publisher.send(3)
         #expect(deliveredValues == [3])
 
-        session.deactivate()
+        activation.cancellation?.cancel()
         publisher.send(4)
         #expect(deliveredValues == [3])
     }
@@ -148,13 +152,14 @@ import Testing
         #expect(setValue != nil)
 
         var receivedValues: [Int] = []
-        receivedValues.append(session.activate { receivedValues.append($0) })
+        let activation = session.activate { receivedValues.append($0) }
+        receivedValues.append(activation.initialValue)
 
         setValue?(2)
         publisher.send(3)
         #expect(writtenValues == [2])
         #expect(receivedValues == [1, 3])
-        session.deactivate()
+        activation.cancellation?.cancel()
     }
 
     @Test
@@ -170,7 +175,8 @@ import Testing
         current = 2
 
         var receivedValues: [Int] = []
-        receivedValues.append(session.activate { receivedValues.append($0) })
+        let activation = session.activate { receivedValues.append($0) }
+        receivedValues.append(activation.initialValue)
         #expect(receivedValues == [2])
 
         current = 3
@@ -179,7 +185,7 @@ import Testing
 
         publisher.send(3)
         #expect(receivedValues == [2, 3])
-        session.deactivate()
+        activation.cancellation?.cancel()
     }
 
     @Test
@@ -198,12 +204,13 @@ import Testing
         #expect(setValue != nil)
 
         var receivedValues: [Int] = []
-        receivedValues.append(session.activate { receivedValues.append($0) })
+        let activation = session.activate { receivedValues.append($0) }
+        receivedValues.append(activation.initialValue)
 
         setValue?(2)
         publisher.send(3)
         #expect(writtenValues == [2])
         #expect(receivedValues == [1, 3])
-        session.deactivate()
+        activation.cancellation?.cancel()
     }
 }

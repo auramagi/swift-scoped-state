@@ -21,4 +21,18 @@ struct CancellationTokenTests {
         cancellationToken = nil
         #expect(cancellationCount == 1)
     }
+
+    @Test
+    func cancelsOnlyOnce() {
+        var cancellationCount = 0
+        var cancellationToken: CancellationToken? = CancellationToken {
+            cancellationCount += 1
+        }
+
+        cancellationToken?.cancel()
+        cancellationToken?.cancel()
+        cancellationToken = nil
+
+        #expect(cancellationCount == 1)
+    }
 }

@@ -36,8 +36,6 @@ import UIKit
 
     private(set) var cancellationCount = 0
 
-    private(set) var deactivationCount = 0
-
     private(set) var writtenValues: [Value] = []
 
     private var nextObservationID = 0
@@ -49,19 +47,17 @@ import UIKit
     }
 
     var readOnlyConnection: Connection<Value> {
-        Connection(
-            currentValue: { self.value },
-            observe: { self.observe($0) },
-            cancel: { self.cancel($0) }
-        )
+        Connection {
+            .init(
+                currentValue: { self.value },
+                observe: { self.observe($0) },
+                cancel: { self.cancel($0) }
+            )
+        }
     }
 
     var writableConnection: Connection<Value>.Writable {
-        Connection(
-            currentValue: { self.value },
-            observe: { self.observe($0) },
-            cancel: { self.cancel($0) }
-        ).set {
+        readOnlyConnection.set {
             self.writtenValues.append($0)
             self.send($0)
         }
@@ -70,11 +66,14 @@ import UIKit
     var unobservedConnection: Connection<Value> {
         Connection {
             .init { _ in
-                self.value
+                .init(
+                    initialValue: self.value,
+                    cancellation: CancellationToken {
+                        self.cancellationCount += 1
+                    }
+                )
             } update: {
                 self.value
-            } deactivate: {
-                self.deactivationCount += 1
             }
         }
     }

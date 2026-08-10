@@ -18,37 +18,24 @@
 private extension GenericConnection.Session {
     static func observing<Observation>(
         activate: @escaping @MainActor (@escaping YieldValue) -> (
-            value: Connected.WrappedValue,
+            initialValue: Connected.WrappedValue,
             observation: Observation
         ),
         cancel: @escaping (Observation) -> Void,
         reconfigure: @escaping @MainActor (Configuration) -> Void
     ) -> Self {
-        var cancellationToken: CancellationToken?
-
-        func cancelObservation() {
-            cancellationToken?.cancel()
-            cancellationToken = nil
-        }
-
-        func start(yield: @escaping YieldValue) -> Connected.WrappedValue {
-            let activation = activate(yield)
-            cancellationToken = CancellationToken { cancel(activation.observation) }
-            return activation.value
-        }
-
-        return Self(
+        Self(
             activate: { yield in
-                cancelObservation()
-                return start(yield: yield)
+                let activation = activate(yield)
+                return Activation(
+                    initialValue: activation.initialValue,
+                    cancellation: CancellationToken {
+                        cancel(activation.observation)
+                    }
+                )
             },
             update: { nil },
-            reconfigure: { configuration, yield in
-                cancelObservation()
-                reconfigure(configuration)
-                return start(yield: yield)
-            },
-            deactivate: cancelObservation,
+            reconfigure: reconfigure,
             setValue: nil
         )
     }
@@ -70,7 +57,7 @@ extension GenericConnection.Session {
                 }
                 let value = currentValue()
                 activation.isOngoing = false
-                return (value, observation)
+                return (initialValue: value, observation: observation)
             },
             cancel: cancel,
             reconfigure: reconfigure
@@ -95,7 +82,7 @@ extension GenericConnection.Session where Configuration == Void {
                     }
                 }
                 activation.isOngoing = false
-                return (activation.state, observation)
+                return (initialValue: activation.state, observation: observation)
             },
             cancel: cancel,
             reconfigure: { _ in }
@@ -130,15 +117,16 @@ extension GenericConnection {
 
                 return MappedConnection.Session(
                     activate: { yield in
-                        transform(session.activate { yield(transform($0)) })
+                        let activation = session.activate { yield(transform($0)) }
+                        return MappedConnection.Session.Activation(
+                            initialValue: transform(activation.initialValue),
+                            cancellation: activation.cancellation
+                        )
                     },
                     update: {
                         session.update().map(transform)
                     },
-                    reconfigure: { configuration, yield in
-                        transform(session.reconfigure(configuration) { yield(transform($0)) })
-                    },
-                    deactivate: session.deactivate
+                    reconfigure: session.reconfigure
                 )
             },
             configurationsEqual: configurationsEqual
@@ -156,10 +144,15 @@ extension GenericConnection {
                 let session = makeSession(configuration)
 
                 return WritableConnection.Session(
-                    activate: session.activate,
+                    activate: { yield in
+                        let activation = session.activate(yield)
+                        return WritableConnection.Session.Activation(
+                            initialValue: activation.initialValue,
+                            cancellation: activation.cancellation
+                        )
+                    },
                     update: session.update,
                     reconfigure: session.reconfigure,
-                    deactivate: session.deactivate,
                     setValue: setValue
                 )
             },
@@ -169,40 +162,14 @@ extension GenericConnection {
 }
 
 extension GenericConnection where Configuration == Void {
-    public init<WrappedValue, Observation>(
-        initialValue: WrappedValue,
-        observe: @escaping @MainActor (@escaping Session.YieldValue) -> Observation,
-        cancel: @escaping (Observation) -> Void
-    ) where Connected == ReadOnlyConnectedValue<WrappedValue> {
-        self.init {
-            Session(
-                initialValue: initialValue,
-                observe: observe,
-                cancel: cancel
-            )
-        }
-    }
-
-    public init<WrappedValue, Observation>(
-        currentValue: @escaping @MainActor () -> WrappedValue,
-        observe: @escaping @MainActor (@escaping Session.YieldValue) -> Observation,
-        cancel: @escaping (Observation) -> Void
-    ) where Connected == ReadOnlyConnectedValue<WrappedValue> {
-        self.init {
-            Session(
-                currentValue: currentValue,
-                observe: observe,
-                cancel: cancel
-            )
-        }
-    }
-
     /// Creates a read-only connection that always provides the same value.
     public static func constant<WrappedValue>(
         _ value: WrappedValue
     ) -> Connection<WrappedValue> {
         Connection<WrappedValue> {
-            .init { _ in value }
+            .init { _ in
+                .init(initialValue: value)
+            }
         }
     }
 }

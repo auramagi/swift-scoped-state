@@ -126,7 +126,7 @@ import Testing
     }
 
     @Test
-    func removingConnectedViewDeactivatesItsChannel() {
+    func removingConnectedViewCancelsItsActivation() {
         let source = TestValueSource(1)
         let container = Container(source: source)
         let probe = ValueProbe<Int>()
@@ -134,7 +134,7 @@ import Testing
             UnobservedConditionalRoot(showValue: true, container: container, probe: probe)
         )
 
-        #expect(source.deactivationCount == 0)
+        #expect(source.cancellationCount == 0)
 
         host.rootView = UnobservedConditionalRoot(
             showValue: false,
@@ -143,7 +143,7 @@ import Testing
         )
         render(host)
 
-        #expect(source.deactivationCount == 1)
+        #expect(source.cancellationCount == 1)
     }
 
     @MainActor private struct Scope {

@@ -19,19 +19,33 @@ extension Connection {
     /// implementation.
     /// Its closures retain any implementation object needed to keep the value alive.
     @MainActor public struct Session {
+        /// The value installed when observation starts and the token retaining
+        /// that observation for the activation lifetime.
+        @MainActor public struct Activation {
+            public let initialValue: Connected.WrappedValue
+
+            public let cancellation: CancellationToken?
+
+            public init(
+                initialValue: Connected.WrappedValue,
+                cancellation: CancellationToken? = nil
+            ) {
+                self.initialValue = initialValue
+                self.cancellation = cancellation
+            }
+        }
+
         /// Delivers values produced after the active lifecycle operation returns.
         public typealias YieldValue = @MainActor (Connected.WrappedValue) -> Void
 
-        /// Starts observation and returns the synchronously resolved current value.
-        public typealias Activate = @MainActor (@escaping YieldValue) -> Connected.WrappedValue
+        /// Starts observation and returns its initial value and cancellation.
+        public typealias Activate = @MainActor (@escaping YieldValue) -> Activation
 
         /// Optionally refreshes the current value without delivering an update.
         public typealias Update = @MainActor () -> Connected.WrappedValue?
 
-        /// Replaces the configuration and returns its synchronous current value.
-        public typealias Reconfigure = @MainActor (Configuration, @escaping YieldValue) -> Connected.WrappedValue
-
-        public typealias Deactivate = @MainActor () -> Void
+        /// Updates the external implementation before starting a new activation.
+        public typealias Reconfigure = @MainActor (Configuration) -> Void
 
         public typealias SetValue = @MainActor (Connected.WrappedValue) -> Void
 
@@ -40,8 +54,6 @@ extension Connection {
         let update: Update
 
         let reconfigure: Reconfigure
-
-        let deactivate: Deactivate
 
         let setValue: SetValue?
     }
@@ -63,13 +75,11 @@ extension GenericConnection.Session {
     public init<WrappedValue>(
         activate: @escaping Activate,
         update: @escaping Update = { nil },
-        reconfigure: @escaping Reconfigure,
-        deactivate: @escaping Deactivate = {}
+        reconfigure: @escaping Reconfigure
     ) where Connected == ReadOnlyConnectedValue<WrappedValue> {
         self.activate = activate
         self.update = update
         self.reconfigure = reconfigure
-        self.deactivate = deactivate
         self.setValue = nil
     }
 
@@ -77,13 +87,11 @@ extension GenericConnection.Session {
         activate: @escaping Activate,
         update: @escaping Update = { nil },
         reconfigure: @escaping Reconfigure,
-        deactivate: @escaping Deactivate = {},
         setValue: @escaping SetValue
     ) where Connected == WritableConnectedValue<WrappedValue> {
         self.activate = activate
         self.update = update
         self.reconfigure = reconfigure
-        self.deactivate = deactivate
         self.setValue = setValue
     }
 }
@@ -91,28 +99,24 @@ extension GenericConnection.Session {
 extension GenericConnection.Session where Configuration == Void {
     public init<WrappedValue>(
         activate: @escaping Activate,
-        update: @escaping Update = { nil },
-        deactivate: @escaping Deactivate = {}
+        update: @escaping Update = { nil }
     ) where Connected == ReadOnlyConnectedValue<WrappedValue> {
         self.init(
             activate: activate,
             update: update,
-            reconfigure: { _, yield in activate(yield) },
-            deactivate: deactivate
+            reconfigure: { _ in }
         )
     }
 
     public init<WrappedValue>(
         activate: @escaping Activate,
         update: @escaping Update = { nil },
-        deactivate: @escaping Deactivate = {},
         setValue: @escaping SetValue
     ) where Connected == WritableConnectedValue<WrappedValue> {
         self.init(
             activate: activate,
             update: update,
-            reconfigure: { _, yield in activate(yield) },
-            deactivate: deactivate,
+            reconfigure: { _ in },
             setValue: setValue
         )
     }
