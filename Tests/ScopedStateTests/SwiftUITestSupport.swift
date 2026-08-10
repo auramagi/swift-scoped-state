@@ -16,8 +16,11 @@ import UIKit
     return host
 }
 
-@MainActor func render<Content>(_ host: UIHostingController<Content>) {
-    host._render(seconds: 0)
+@MainActor func render<Content>(
+    _ host: UIHostingController<Content>,
+    seconds: TimeInterval = 0
+) {
+    host._render(seconds: seconds)
 }
 
 @MainActor final class TestValueSource<Value> {
@@ -112,6 +115,10 @@ import UIKit
 
     func record(_ value: Value, binding: Binding<Value>) {
         values.append(value)
+        self.binding = binding
+    }
+
+    func record(_ binding: Binding<Value>) {
         self.binding = binding
     }
 }

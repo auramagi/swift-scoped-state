@@ -42,6 +42,8 @@ struct ContentView: View {
 
                 AppContainerDiagnostics()
 
+                BindingConnectionDemo()
+
                 ScopeControls(
                     productID: $productID,
                     pricingMode: $pricingMode,
@@ -60,6 +62,34 @@ struct ContentView: View {
 
     private var configuration: ProductDetailConfiguration {
         ProductDetailConfiguration(productID: productID, pricingMode: pricingMode)
+    }
+}
+
+private struct BindingConnectionDemo: View {
+    @State private var isEnabled = false
+
+    private var scope: BindingDemoScope {
+        BindingDemoScope(isEnabled: .binding($isEnabled))
+    }
+
+    var body: some View {
+        GroupBox("View-backed Binding") {
+            VStack(alignment: .leading, spacing: 12) {
+                Toggle("View state", isOn: $isEnabled)
+
+                BindingConnectedToggle()
+            }
+            .padding(.vertical, 4)
+        }
+        .container(self, scope: \BindingConnectionDemo.scope)
+    }
+}
+
+private struct BindingConnectedToggle: View {
+    @ScopedState(\BindingDemoScope.isEnabled) private var isEnabled
+
+    var body: some View {
+        Toggle("Connected state", isOn: $isEnabled)
     }
 }
 
@@ -275,6 +305,10 @@ struct ProductDetailSnapshot: Equatable {
 
 @MainActor struct AppDiagnosticsScope {
     let containerID: Connection<UUID>
+}
+
+@MainActor struct BindingDemoScope {
+    let isEnabled: Connection<Bool>.Writable
 }
 
 @MainActor final class AppContainer {
