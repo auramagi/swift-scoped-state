@@ -21,41 +21,24 @@ extension Connection {
     @MainActor public struct Session {
         /// The value installed when observation starts and the token retaining
         /// that observation for the activation lifetime.
-        @MainActor public struct Activation {
-            public let initialValue: Connected.WrappedValue
-
-            public let cancellation: CancellationToken?
-
-            public init(
-                initialValue: Connected.WrappedValue,
-                cancellation: CancellationToken? = nil
-            ) {
-                self.initialValue = initialValue
-                self.cancellation = cancellation
-            }
-        }
+        public typealias Activation = (
+            initialValue: Connected.WrappedValue,
+            cancellation: CancellationToken?
+        )
 
         /// Delivers values produced after the active lifecycle operation returns.
         public typealias YieldValue = @MainActor (Connected.WrappedValue) -> Void
 
         /// Starts observation and returns its initial value and cancellation.
-        public typealias Activate = @MainActor (@escaping YieldValue) -> Activation
+        let activate: @MainActor (@escaping YieldValue) -> Activation
 
         /// Optionally refreshes the current value without delivering an update.
-        public typealias Update = @MainActor () -> Connected.WrappedValue?
+        let update: @MainActor () -> Connected.WrappedValue?
 
         /// Updates the external implementation before starting a new activation.
-        public typealias Reconfigure = @MainActor (Configuration) -> Void
+        let reconfigure: @MainActor (Configuration) -> Void
 
-        public typealias SetValue = @MainActor (Connected.WrappedValue) -> Void
-
-        let activate: Activate
-
-        let update: Update
-
-        let reconfigure: Reconfigure
-
-        let setValue: SetValue?
+        let setValue: (@MainActor (Connected.WrappedValue) -> Void)?
     }
 
     let makeSession: @MainActor (Configuration) -> Session
@@ -73,9 +56,9 @@ extension Connection {
 
 extension GenericConnection.Session {
     public init<WrappedValue>(
-        activate: @escaping Activate,
-        update: @escaping Update = { nil },
-        reconfigure: @escaping Reconfigure
+        activate: @escaping @MainActor (@escaping YieldValue) -> Activation,
+        update: @escaping @MainActor () -> WrappedValue? = { nil },
+        reconfigure: @escaping @MainActor (Configuration) -> Void
     ) where Connected == ReadOnlyConnectedValue<WrappedValue> {
         self.activate = activate
         self.update = update
@@ -84,10 +67,10 @@ extension GenericConnection.Session {
     }
 
     public init<WrappedValue>(
-        activate: @escaping Activate,
-        update: @escaping Update = { nil },
-        reconfigure: @escaping Reconfigure,
-        setValue: @escaping SetValue
+        activate: @escaping @MainActor (@escaping YieldValue) -> Activation,
+        update: @escaping @MainActor () -> WrappedValue? = { nil },
+        reconfigure: @escaping @MainActor (Configuration) -> Void,
+        setValue: @escaping @MainActor (WrappedValue) -> Void
     ) where Connected == WritableConnectedValue<WrappedValue> {
         self.activate = activate
         self.update = update
@@ -98,8 +81,8 @@ extension GenericConnection.Session {
 
 extension GenericConnection.Session where Configuration == Void {
     public init<WrappedValue>(
-        activate: @escaping Activate,
-        update: @escaping Update = { nil }
+        activate: @escaping @MainActor (@escaping YieldValue) -> Activation,
+        update: @escaping @MainActor () -> WrappedValue? = { nil }
     ) where Connected == ReadOnlyConnectedValue<WrappedValue> {
         self.init(
             activate: activate,
@@ -109,9 +92,9 @@ extension GenericConnection.Session where Configuration == Void {
     }
 
     public init<WrappedValue>(
-        activate: @escaping Activate,
-        update: @escaping Update = { nil },
-        setValue: @escaping SetValue
+        activate: @escaping @MainActor (@escaping YieldValue) -> Activation,
+        update: @escaping @MainActor () -> WrappedValue? = { nil },
+        setValue: @escaping @MainActor (WrappedValue) -> Void
     ) where Connected == WritableConnectedValue<WrappedValue> {
         self.init(
             activate: activate,

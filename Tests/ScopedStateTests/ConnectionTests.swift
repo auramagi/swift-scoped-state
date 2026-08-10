@@ -17,7 +17,7 @@ import Testing
         var events: [String] = []
         let session = Session { _ in
             events.append("activate")
-            return .init(
+            return (
                 initialValue: 1,
                 cancellation: CancellationToken {
                     events.append("cancel")
@@ -47,7 +47,7 @@ import Testing
 
         var writtenValues: [Int] = []
         let session = Session { _ in
-            .init(initialValue: 0)
+            (initialValue: 0, cancellation: nil)
         } setValue: {
             writtenValues.append($0)
         }
@@ -68,7 +68,7 @@ import Testing
 
         let connection = ConfiguredConnection { configuration in
             ConfiguredConnection.Session { _ in
-                .init(initialValue: configuration.count)
+                (initialValue: configuration.count, cancellation: nil)
             } reconfigure: { _ in
             }
         }
@@ -88,7 +88,7 @@ import Testing
         let connection = ConfiguredConnection(
             makeSession: { _ in
                 ConfiguredConnection.Session { _ in
-                    .init(initialValue: 0)
+                    (initialValue: 0, cancellation: nil)
                 } reconfigure: { configuration in
                     updatedConfigurations.append(configuration)
                 }
@@ -214,7 +214,7 @@ import Testing
         let source = SourceConnection(
             makeSession: { configuration in
                 SourceConnection.Session { _ in
-                    .init(
+                    (
                         initialValue: configuration.count,
                         cancellation: CancellationToken {
                             cancellationCount += 1

@@ -66,7 +66,7 @@ import UIKit
     var unobservedConnection: Connection<Value> {
         Connection {
             .init { _ in
-                .init(
+                (
                     initialValue: self.value,
                     cancellation: CancellationToken {
                         self.cancellationCount += 1

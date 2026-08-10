@@ -27,7 +27,7 @@ private extension GenericConnection.Session {
         Self(
             activate: { yield in
                 let activation = activate(yield)
-                return Activation(
+                return (
                     initialValue: activation.initialValue,
                     cancellation: CancellationToken {
                         cancel(activation.observation)
@@ -118,7 +118,7 @@ extension GenericConnection {
                 return MappedConnection.Session(
                     activate: { yield in
                         let activation = session.activate { yield(transform($0)) }
-                        return MappedConnection.Session.Activation(
+                        return (
                             initialValue: transform(activation.initialValue),
                             cancellation: activation.cancellation
                         )
@@ -146,7 +146,7 @@ extension GenericConnection {
                 return WritableConnection.Session(
                     activate: { yield in
                         let activation = session.activate(yield)
-                        return WritableConnection.Session.Activation(
+                        return (
                             initialValue: activation.initialValue,
                             cancellation: activation.cancellation
                         )
@@ -168,7 +168,7 @@ extension GenericConnection where Configuration == Void {
     ) -> Connection<WrappedValue> {
         Connection<WrappedValue> {
             .init { _ in
-                .init(initialValue: value)
+                (initialValue: value, cancellation: nil)
             }
         }
     }
