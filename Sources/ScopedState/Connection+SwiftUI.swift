@@ -15,7 +15,7 @@ extension GenericConnection where Configuration == Void {
         Connection<WrappedValue> {
             .init { _ in
                 (initialValue: binding.wrappedValue, cancellation: nil)
-            } update: {
+            } refresh: {
                 binding.wrappedValue
             }
         }

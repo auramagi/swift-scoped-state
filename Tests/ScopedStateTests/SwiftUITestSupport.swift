@@ -72,7 +72,7 @@ import UIKit
                         self.cancellationCount += 1
                     }
                 )
-            } update: {
+            } refresh: {
                 self.value
             }
         }

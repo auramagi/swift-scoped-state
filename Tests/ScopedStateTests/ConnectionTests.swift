@@ -23,8 +23,8 @@ import Testing
                     events.append("cancel")
                 }
             )
-        } update: {
-            events.append("update")
+        } refresh: {
+            events.append("refresh")
             return nil
         } reconfigure: { _ in
             events.append("reconfigure")
@@ -34,11 +34,11 @@ import Testing
 
         let activation = session.activate { _ in }
         #expect(activation.initialValue == 1)
-        #expect(session.update() == nil)
+        #expect(session.refresh() == nil)
         session.reconfigure(())
         activation.cancellation?.cancel()
 
-        #expect(events == ["activate", "update", "reconfigure", "cancel"])
+        #expect(events == ["activate", "refresh", "reconfigure", "cancel"])
     }
 
     @Test
@@ -141,8 +141,16 @@ import Testing
 
         var readOnlyValues: [Int] = []
         var writableValues: [Int] = []
-        let readOnlyActivation = readOnlySession.activate { readOnlyValues.append($0) }
-        let writableActivation = writableSession.activate { writableValues.append($0) }
+        let readOnlyActivation = readOnlySession.activate {
+            if case let .value(value) = $0 {
+                readOnlyValues.append(value)
+            }
+        }
+        let writableActivation = writableSession.activate {
+            if case let .value(value) = $0 {
+                writableValues.append(value)
+            }
+        }
         readOnlyValues.append(readOnlyActivation.initialValue)
         writableValues.append(writableActivation.initialValue)
 
@@ -151,8 +159,8 @@ import Testing
         #expect(observationCount == 2)
 
         currentValue = 2
-        #expect(readOnlySession.update() == nil)
-        #expect(writableSession.update() == nil)
+        #expect(readOnlySession.refresh() == nil)
+        #expect(writableSession.refresh() == nil)
         #expect(readOnlyValues == [1])
         #expect(writableValues == [1])
 
@@ -183,7 +191,7 @@ import Testing
         activation = nil
 
         #expect(cancellationCount == 1)
-        #expect(session.update() == nil)
+        #expect(session.refresh() == nil)
     }
 
     @Test
@@ -200,7 +208,11 @@ import Testing
         let session = connection.makeSession(())
         var deliveredValues: [Int] = []
 
-        let activation = session.activate { deliveredValues.append($0) }
+        let activation = session.activate {
+            if case let .value(value) = $0 {
+                deliveredValues.append(value)
+            }
+        }
 
         #expect(activation.initialValue == 2)
         #expect(deliveredValues.isEmpty)
@@ -220,7 +232,7 @@ import Testing
                             cancellationCount += 1
                         }
                     )
-                } update: {
+                } refresh: {
                     2
                 } reconfigure: { _ in
                 }
@@ -233,7 +245,7 @@ import Testing
         #expect(mapped.configurationsEqual("VALUE", "value"))
         let initialActivation = session.activate { _ in }
         #expect(initialActivation.initialValue == "value=7")
-        #expect(session.update() == "value=2")
+        #expect(session.refresh() == "value=2")
         initialActivation.cancellation?.cancel()
         session.reconfigure("updated")
         let updatedActivation = session.activate { _ in }

@@ -67,13 +67,18 @@ import SwiftUI
             }
         }
 
-        private func makeYield(valuesEqual: @escaping ValuesEqual) -> Connection.Session.YieldValue {
-            { [storage] in
-                storage.setValue(
-                    $0,
-                    notifyingObservers: true,
-                    valuesEqual: valuesEqual
-                )
+        private func makeYield(valuesEqual: @escaping ValuesEqual) -> Connection.Session.YieldUpdate {
+            { [storage] update in
+                switch update {
+                case let .value(value):
+                    storage.setValue(
+                        value,
+                        notifyingObservers: true,
+                        valuesEqual: valuesEqual
+                    )
+                case .invalidate:
+                    storage.invalidate()
+                }
             }
         }
 
@@ -105,7 +110,9 @@ import SwiftUI
                 let session = connection.makeSession(configuration)
 
                 context?.cancellation?.cancel()
-                let activation = session.activate(makeYield(valuesEqual: valuesEqual))
+                let activation = session.activate(
+                    makeYield(valuesEqual: valuesEqual)
+                )
                 context = Context(
                     identity: identity,
                     connection: connection,
@@ -130,7 +137,7 @@ import SwiftUI
                     activation.initialValue,
                     valuesEqual: context.valuesEqual
                 )
-            } else if let context, let value = context.session.update() {
+            } else if let context, let value = context.session.refresh() {
                 install(
                     value,
                     valuesEqual: context.valuesEqual

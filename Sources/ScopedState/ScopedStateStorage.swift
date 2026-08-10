@@ -36,6 +36,12 @@ import Observation
         }
     }
 
+    /// Notifies readers to refresh without replacing the stored value or
+    /// changing its generation.
+    func invalidate() {
+        withMutation(keyPath: \.state) {}
+    }
+
     var requiredValue: Value {
         if let value {
             value

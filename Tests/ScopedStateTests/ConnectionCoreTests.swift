@@ -34,7 +34,7 @@ import Testing
         #expect(session.setValue == nil)
 
         #expect(session.activate { _ in }.initialValue == 42)
-        #expect(session.update() == nil)
+        #expect(session.refresh() == nil)
     }
 
     @Test

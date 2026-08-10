@@ -88,6 +88,29 @@ import Testing
     }
 
     @Test
+    func invalidationNotifiesWithoutReplacingTheValue() {
+        let storage = ScopedStateStorage<Int>()
+        storage.setValue(
+            1,
+            notifyingObservers: false,
+            valuesEqual: ==
+        )
+
+        let notificationCount = OSAllocatedUnfairLock(initialState: 0)
+        withObservationTracking {
+            _ = storage.value
+        } onChange: {
+            notificationCount.withLock { $0 += 1 }
+        }
+
+        storage.invalidate()
+
+        #expect(storage.requiredValue == 1)
+        #expect(storage.generation == 1)
+        #expect(notificationCount.withLock { $0 } == 1)
+    }
+
+    @Test
     func equalValuesDoNotReplaceTheStoredValue() {
         struct Value {
             let identity: Int

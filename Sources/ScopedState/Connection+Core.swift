@@ -26,7 +26,7 @@ private extension GenericConnection.Session {
     ) -> Self {
         Self(
             activate: { yield in
-                let activation = activate(yield)
+                let activation = activate { yield(.value($0)) }
                 return (
                     initialValue: activation.initialValue,
                     cancellation: CancellationToken {
@@ -34,7 +34,7 @@ private extension GenericConnection.Session {
                     }
                 )
             },
-            update: { nil },
+            refresh: { nil },
             reconfigure: reconfigure,
             setValue: nil
         )
@@ -117,14 +117,21 @@ extension GenericConnection {
 
                 return MappedConnection.Session(
                     activate: { yield in
-                        let activation = session.activate { yield(transform($0)) }
+                        let activation = session.activate { update in
+                            switch update {
+                            case let .value(value):
+                                yield(.value(transform(value)))
+                            case .invalidate:
+                                yield(.invalidate)
+                            }
+                        }
                         return (
                             initialValue: transform(activation.initialValue),
                             cancellation: activation.cancellation
                         )
                     },
-                    update: {
-                        session.update().map(transform)
+                    refresh: {
+                        session.refresh().map(transform)
                     },
                     reconfigure: session.reconfigure
                 )
@@ -145,13 +152,20 @@ extension GenericConnection {
 
                 return WritableConnection.Session(
                     activate: { yield in
-                        let activation = session.activate(yield)
+                        let activation = session.activate { update in
+                            switch update {
+                            case let .value(value):
+                                yield(.value(value))
+                            case .invalidate:
+                                yield(.invalidate)
+                            }
+                        }
                         return (
                             initialValue: activation.initialValue,
                             cancellation: activation.cancellation
                         )
                     },
-                    update: session.update,
+                    refresh: session.refresh,
                     reconfigure: session.reconfigure,
                     setValue: setValue
                 )

@@ -20,7 +20,11 @@ import Testing
         #expect(session.setValue == nil)
 
         var deliveredValues: [Int] = []
-        let activation = session.activate { deliveredValues.append($0) }
+        let activation = session.activate {
+            if case let .value(value) = $0 {
+                deliveredValues.append(value)
+            }
+        }
         #expect(activation.initialValue == 1)
         #expect(deliveredValues.isEmpty)
 
@@ -42,7 +46,11 @@ import Testing
         #expect(setValue != nil)
 
         var receivedValues: [Int] = []
-        let activation = session.activate { receivedValues.append($0) }
+        let activation = session.activate {
+            if case let .value(value) = $0 {
+                receivedValues.append(value)
+            }
+        }
         receivedValues.append(activation.initialValue)
 
         setValue?(2)
@@ -64,7 +72,11 @@ import Testing
         #expect(setValue != nil)
 
         var receivedValues: [Int] = []
-        let activation = session.activate { receivedValues.append($0) }
+        let activation = session.activate {
+            if case let .value(value) = $0 {
+                receivedValues.append(value)
+            }
+        }
         receivedValues.append(activation.initialValue)
 
         setValue?(2)
@@ -83,7 +95,11 @@ import Testing
         let session = connection.makeSession(())
 
         var receivedValues: [String] = []
-        let activation = session.activate { receivedValues.append($0) }
+        let activation = session.activate {
+            if case let .value(value) = $0 {
+                receivedValues.append(value)
+            }
+        }
         receivedValues.append(activation.initialValue)
         subject.send(3)
         #expect(receivedValues == ["value=2", "value=3"])
@@ -103,7 +119,11 @@ import Testing
         #expect(setValue != nil)
 
         var receivedValues: [String] = []
-        let activation = session.activate { receivedValues.append($0) }
+        let activation = session.activate {
+            if case let .value(value) = $0 {
+                receivedValues.append(value)
+            }
+        }
         receivedValues.append(activation.initialValue)
         subject.send(3)
 
@@ -124,7 +144,11 @@ import Testing
         let session = connection.makeSession(())
 
         var deliveredValues: [Int] = []
-        let activation = session.activate { deliveredValues.append($0) }
+        let activation = session.activate {
+            if case let .value(value) = $0 {
+                deliveredValues.append(value)
+            }
+        }
         #expect(activation.initialValue == 2)
         #expect(deliveredValues.isEmpty)
 
@@ -152,7 +176,11 @@ import Testing
         #expect(setValue != nil)
 
         var receivedValues: [Int] = []
-        let activation = session.activate { receivedValues.append($0) }
+        let activation = session.activate {
+            if case let .value(value) = $0 {
+                receivedValues.append(value)
+            }
+        }
         receivedValues.append(activation.initialValue)
 
         setValue?(2)
@@ -175,12 +203,16 @@ import Testing
         current = 2
 
         var receivedValues: [Int] = []
-        let activation = session.activate { receivedValues.append($0) }
+        let activation = session.activate {
+            if case let .value(value) = $0 {
+                receivedValues.append(value)
+            }
+        }
         receivedValues.append(activation.initialValue)
         #expect(receivedValues == [2])
 
         current = 3
-        #expect(session.update() == nil)
+        #expect(session.refresh() == nil)
         #expect(receivedValues == [2])
 
         publisher.send(3)
@@ -204,7 +236,11 @@ import Testing
         #expect(setValue != nil)
 
         var receivedValues: [Int] = []
-        let activation = session.activate { receivedValues.append($0) }
+        let activation = session.activate {
+            if case let .value(value) = $0 {
+                receivedValues.append(value)
+            }
+        }
         receivedValues.append(activation.initialValue)
 
         setValue?(2)

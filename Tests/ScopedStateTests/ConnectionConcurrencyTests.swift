@@ -29,7 +29,11 @@ import Testing
         let (receivedValues, receivedValuesContinuation) = AsyncStream.makeStream(of: Int.self)
         var receivedValuesIterator = receivedValues.makeAsyncIterator()
 
-        let activation = session.activate { receivedValuesContinuation.yield($0) }
+        let activation = session.activate {
+            if case let .value(value) = $0 {
+                receivedValuesContinuation.yield(value)
+            }
+        }
         receivedValuesContinuation.yield(activation.initialValue)
         #expect(await receivedValuesIterator.next() == 1)
 
@@ -60,7 +64,11 @@ import Testing
         var receivedValuesIterator = receivedValues.makeAsyncIterator()
 
         currentValue.value = 2
-        let activation = session.activate { receivedValuesContinuation.yield($0) }
+        let activation = session.activate {
+            if case let .value(value) = $0 {
+                receivedValuesContinuation.yield(value)
+            }
+        }
         receivedValuesContinuation.yield(activation.initialValue)
         #expect(await receivedValuesIterator.next() == "value=2")
 
@@ -84,7 +92,11 @@ import Testing
         let (receivedValues, receivedValuesContinuation) = AsyncStream.makeStream(of: Int.self)
         var receivedValuesIterator = receivedValues.makeAsyncIterator()
 
-        let activation = session.activate { receivedValuesContinuation.yield($0) }
+        let activation = session.activate {
+            if case let .value(value) = $0 {
+                receivedValuesContinuation.yield(value)
+            }
+        }
         receivedValuesContinuation.yield(activation.initialValue)
         #expect(await receivedValuesIterator.next() == 1)
 
