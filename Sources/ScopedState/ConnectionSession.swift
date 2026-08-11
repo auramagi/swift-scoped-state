@@ -19,8 +19,8 @@
         case invalidate
     }
 
-    /// The value installed when observation starts and the token retaining
-    /// that observation for the activation lifetime.
+    /// The value installed when observation starts and the token whose
+    /// ownership transfers to ScopedState for the activation lifetime.
     public typealias Activation = (
         initialValue: Value,
         cancellation: CancellationToken?

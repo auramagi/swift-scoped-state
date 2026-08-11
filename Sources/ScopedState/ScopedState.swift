@@ -144,10 +144,6 @@ import SwiftUI
                 )
             }
         }
-
-        isolated deinit {
-            context?.cancellation?.cancel()
-        }
     }
 
     @State private var coordinator = Coordinator()
