@@ -67,3 +67,99 @@ extension ConnectionSession where Configuration == Void {
         )
     }
 }
+
+@MainActor private final class ObservationActivation<State> {
+    var state: State
+
+    var isOngoing = true
+
+    init(state: State) {
+        self.state = state
+    }
+}
+
+private extension ConnectionSession {
+    static func observing<Observation>(
+        activate: @escaping (@escaping @MainActor (Value) -> Void) -> (
+            initialValue: Value,
+            observation: Observation
+        ),
+        cancel: @escaping (Observation) -> Void,
+        reconfigure: @escaping (Configuration) -> Void
+    ) -> Self {
+        Self(
+            activate: { yield in
+                let activation = activate { yield(.value($0)) }
+                return (
+                    initialValue: activation.initialValue,
+                    cancellation: CancellationToken {
+                        cancel(activation.observation)
+                    }
+                )
+            },
+            reconfigure: reconfigure
+        )
+    }
+}
+
+extension ConnectionSession {
+    public init<Observation>(
+        currentValue: @escaping () -> Value,
+        observe: @escaping (@escaping @MainActor (Value) -> Void) -> Observation,
+        cancel: @escaping (Observation) -> Void,
+        reconfigure: @escaping (Configuration) -> Void
+    ) {
+        self = Self.observing(
+            activate: { yield in
+                let activation = ObservationActivation(state: ())
+                let observation = observe { value in
+                    guard !activation.isOngoing else { return }
+                    yield(value)
+                }
+                let value = currentValue()
+                activation.isOngoing = false
+                return (initialValue: value, observation: observation)
+            },
+            cancel: cancel,
+            reconfigure: reconfigure
+        )
+    }
+}
+
+extension ConnectionSession where Configuration == Void {
+    public init<Observation>(
+        initialValue: Value,
+        observe: @escaping (@escaping @MainActor (Value) -> Void) -> Observation,
+        cancel: @escaping (Observation) -> Void
+    ) {
+        self = Self.observing(
+            activate: { yield in
+                let activation = ObservationActivation(state: initialValue)
+                let observation = observe { value in
+                    if activation.isOngoing {
+                        activation.state = value
+                    } else {
+                        yield(value)
+                    }
+                }
+                activation.isOngoing = false
+                return (initialValue: activation.state, observation: observation)
+            },
+            cancel: cancel,
+            reconfigure: { _ in }
+        )
+    }
+
+    public init<Observation>(
+        currentValue: @escaping () -> Value,
+        observe: @escaping (@escaping @MainActor (Value) -> Void) -> Observation,
+        cancel: @escaping (Observation) -> Void
+    ) {
+        self.init(
+            currentValue: currentValue,
+            observe: observe,
+            cancel: cancel,
+            reconfigure: { _ in }
+        )
+    }
+}
