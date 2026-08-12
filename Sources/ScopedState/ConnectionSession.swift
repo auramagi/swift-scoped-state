@@ -68,13 +68,13 @@ extension ConnectionSession where Configuration == Void {
     }
 }
 
-@MainActor private final class ActivationBuffer<State> {
-    var state: State
+@MainActor private final class ActivationState<Value> {
+    var value: Value
 
-    var isOngoing = true
+    var didActivate = false
 
-    init(state: State) {
-        self.state = state
+    init(value: Value) {
+        self.value = value
     }
 }
 
@@ -111,13 +111,13 @@ extension ConnectionSession {
     ) {
         self = Self.observing(
             activate: { yield in
-                let activation = ActivationBuffer(state: ())
+                let activation = ActivationState(value: ())
                 let observation = observe { value in
-                    guard !activation.isOngoing else { return }
+                    guard activation.didActivate else { return }
                     yield(value)
                 }
                 let value = currentValue()
-                activation.isOngoing = false
+                activation.didActivate = true
                 return (initialValue: value, observation: observation)
             },
             cancel: cancel,
@@ -134,16 +134,16 @@ extension ConnectionSession where Configuration == Void {
     ) {
         self = Self.observing(
             activate: { yield in
-                let activation = ActivationBuffer(state: initialValue)
+                let activation = ActivationState(value: initialValue)
                 let observation = observe { value in
-                    if activation.isOngoing {
-                        activation.state = value
-                    } else {
+                    if activation.didActivate {
                         yield(value)
+                    } else {
+                        activation.value = value
                     }
                 }
-                activation.isOngoing = false
-                return (initialValue: activation.state, observation: observation)
+                activation.didActivate = true
+                return (initialValue: activation.value, observation: observation)
             },
             cancel: cancel,
             reconfigure: { _ in }
