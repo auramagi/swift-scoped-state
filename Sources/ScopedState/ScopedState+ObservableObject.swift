@@ -44,8 +44,8 @@ extension ScopedState where Configuration == Void, Connected.WrappedValue: Obser
 private extension ScopedState.ValueBehavior where Connected.WrappedValue: ObservableObject {
     static var observableObject: Self {
         Self(
-            valuesEqual: { $0 === $1 },
-            observeChanges: { value, invalidate in
+            areEquivalent: { $0 === $1 },
+            makeObservation: { value, invalidate in
                 let observation = value.objectWillChange.sink { _ in
                     invalidate()
                 }

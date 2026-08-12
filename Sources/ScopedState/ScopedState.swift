@@ -11,9 +11,9 @@ import SwiftUI
     private typealias Connection = GenericConnection<Configuration, Connected>
 
     @MainActor struct ValueBehavior {
-        let valuesEqual: (_ lhs: Connected.WrappedValue, _ rhs: Connected.WrappedValue) -> Bool
+        let areEquivalent: (_ lhs: Connected.WrappedValue, _ rhs: Connected.WrappedValue) -> Bool
 
-        let observeChanges: ((_ value: Connected.WrappedValue, _ invalidate: @escaping @MainActor () -> Void) -> CancellationToken)?
+        let makeObservation: ((_ value: Connected.WrappedValue, _ invalidate: @escaping @MainActor () -> Void) -> CancellationToken)?
     }
 
     @MainActor private final class Coordinator {
@@ -63,7 +63,7 @@ import SwiftUI
                 if let setValue = context.session.setValue {
                     setValue(newValue)
                 } else {
-                    receive(newValue, notifyingObservers: true, valueBehavior: context.valueBehavior)
+                    applyValue(newValue, notifyingObservers: true, valueBehavior: context.valueBehavior)
                 }
             }
         }
@@ -74,7 +74,7 @@ import SwiftUI
 
                 switch update {
                 case let .value(value):
-                    receive(value, notifyingObservers: true, valueBehavior: valueBehavior)
+                    applyValue(value, notifyingObservers: true, valueBehavior: valueBehavior)
 
                 case .invalidate:
                     storage.invalidate()
@@ -82,23 +82,23 @@ import SwiftUI
             }
         }
 
-        private func receive(
+        private func applyValue(
             _ value: Connected.WrappedValue,
             notifyingObservers: Bool,
             valueBehavior: ValueBehavior
         ) {
-            let valueChanged = !storage.valueEquals(value, by: valueBehavior.valuesEqual)
+            let valueChanged = !storage.valueEquals(value, by: valueBehavior.areEquivalent)
 
             if valueChanged {
                 storage.setValue(value, notifyingObservers: notifyingObservers)
             }
 
-            guard let observeChanges = valueBehavior.observeChanges, valueChanged || context?.valueObservation == nil else {
+            guard let makeObservation = valueBehavior.makeObservation, valueChanged || context?.valueObservation == nil else {
                 return
             }
 
             context?.valueObservation?.cancel()
-            context?.valueObservation = observeChanges(value) { [storage] in
+            context?.valueObservation = makeObservation(value) { [storage] in
                 storage.invalidate()
             }
         }
@@ -132,7 +132,7 @@ import SwiftUI
                     valueObservation: nil,
                     configuration: configuration
                 )
-                receive(activation.initialValue, notifyingObservers: false, valueBehavior: valueBehavior)
+                applyValue(activation.initialValue, notifyingObservers: false, valueBehavior: valueBehavior)
             } else if let context, !context.connection.configurationsEqual(context.configuration, configuration) {
                 context.sessionObservation?.cancel()
                 context.session.reconfigure(configuration)
@@ -141,9 +141,9 @@ import SwiftUI
                 )
                 self.context?.sessionObservation = activation.observation
                 self.context?.configuration = configuration
-                receive(activation.initialValue, notifyingObservers: false, valueBehavior: valueBehavior)
+                applyValue(activation.initialValue, notifyingObservers: false, valueBehavior: valueBehavior)
             } else if let context, let value = context.session.refresh() {
-                receive(value, notifyingObservers: false, valueBehavior: context.valueBehavior)
+                applyValue(value, notifyingObservers: false, valueBehavior: context.valueBehavior)
             }
         }
     }
@@ -221,8 +221,8 @@ import SwiftUI
 private extension ScopedState.ValueBehavior {
     static var `default`: Self {
         Self(
-            valuesEqual: { _, _ in false },
-            observeChanges: nil
+            areEquivalent: { _, _ in false },
+            makeObservation: nil
         )
     }
 }
@@ -230,8 +230,8 @@ private extension ScopedState.ValueBehavior {
 private extension ScopedState.ValueBehavior where Connected.WrappedValue: Equatable {
     static var equatable: Self {
         Self(
-            valuesEqual: { $0 == $1 },
-            observeChanges: nil
+            areEquivalent: { $0 == $1 },
+            makeObservation: nil
         )
     }
 }
