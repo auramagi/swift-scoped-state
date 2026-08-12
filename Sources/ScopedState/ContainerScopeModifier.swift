@@ -60,27 +60,6 @@ import SwiftUI
     }
 }
 
-/// Installs a scope whose binding-backed connections remain live as its
-/// SwiftUI view container updates.
-@MainActor private struct ViewContainerScopeModifier<Container: View, Scope>: ViewModifier {
-    let scope: ScopedStateStorage<Scope>
-
-    init(container: Container, scope keyPath: KeyPath<Container, Scope>) {
-        let storage = ScopedStateStorage<Scope>()
-        storage.setValue(
-            container[keyPath: keyPath],
-            notifyingObservers: false,
-            valuesEqual: { _, _ in false }
-        )
-        self.scope = storage
-    }
-
-    func body(content: Content) -> some View {
-        content
-            .environment(scope)
-    }
-}
-
 extension View {
     /// Establishes a scope from an externally owned container.
     @MainActor public func container<Container: AnyObject, Scope>(
@@ -88,14 +67,5 @@ extension View {
         scope: KeyPath<Container, Scope>
     ) -> some View {
         modifier(ContainerScopeModifier(container: container, scope: scope))
-    }
-
-    /// Establishes a scope whose connections can be derived from a SwiftUI
-    /// view's dynamic properties, including native bindings.
-    @MainActor public func container<Container: View, Scope>(
-        _ container: Container,
-        scope: KeyPath<Container, Scope>
-    ) -> some View {
-        modifier(ViewContainerScopeModifier(container: container, scope: scope))
     }
 }

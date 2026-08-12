@@ -150,7 +150,10 @@ import Testing
         let model = Model(value: 1)
         let probe = ValueProbe<Int>()
         let host = makeTestHost(
-            Root(scope: Scope(value: .observation(model, \Model.value)), probe: probe)
+            Root(
+                container: Container(scope: Scope(value: .observation(model, \Model.value))),
+                probe: probe
+            )
         )
 
         #expect(probe.values.last == 1)
@@ -190,14 +193,22 @@ import Testing
         let value: Connection<Int>
     }
 
-    private struct Root: View {
+    private final class Container {
         let scope: Scope
+
+        init(scope: Scope) {
+            self.scope = scope
+        }
+    }
+
+    private struct Root: View {
+        let container: Container
 
         let probe: ValueProbe<Int>
 
         var body: some View {
             Reader(probe: probe)
-                .container(self, scope: \Root.scope)
+                .container(container, scope: \Container.scope)
         }
     }
 
