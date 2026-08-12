@@ -35,6 +35,30 @@ import Testing
     }
 
     @Test
+    func initialValuesAreLocalToEachConnectedProperty() throws {
+        let container = Container(source: TestValueSource(0))
+        let firstProbe = BindingProbe<Int>()
+        let secondProbe = BindingProbe<Int>()
+        let host = makeTestHost(
+            InitialValuesRoot(
+                container: container,
+                firstProbe: firstProbe,
+                secondProbe: secondProbe
+            )
+        )
+
+        #expect(firstProbe.values.last == 1)
+        #expect(secondProbe.values.last == 1)
+
+        let firstBinding = try #require(firstProbe.binding)
+        firstBinding.wrappedValue = 2
+        render(host)
+
+        #expect(firstProbe.values.last == 2)
+        #expect(secondProbe.values.last == 1)
+    }
+
+    @Test
     func readOnlyProjectionCreatesWritableMemberBindings() throws {
         let model = ScopedStateTestModel(flag: false)
         let container = Container(source: TestValueSource(0), model: model)
@@ -151,6 +175,8 @@ import Testing
 
         let writableValue: Connection<Int>.Writable
 
+        let initialValue: Connection<Int>.Writable
+
         let unobservedValue: Connection<Int>
 
         let observedInitialValue: Connection<Int>
@@ -180,6 +206,7 @@ import Testing
             return Scope(
                 value: source.readOnlyConnection,
                 writableValue: source.writableConnection,
+                initialValue: .initial(1),
                 unobservedValue: source.unobservedConnection,
                 observedInitialValue: .publisher(updates, initialValue: 1),
                 model: .constant(model)
@@ -214,6 +241,17 @@ import Testing
 
     @MainActor private struct WritableValueReader: View {
         @ScopedState(\Scope.writableValue) private var value
+
+        let probe: BindingProbe<Int>
+
+        var body: some View {
+            let _ = probe.record(value, binding: $value)
+            Color.clear
+        }
+    }
+
+    @MainActor private struct InitialValueReader: View {
+        @ScopedState(\Scope.initialValue) private var value
 
         let probe: BindingProbe<Int>
 
@@ -264,6 +302,22 @@ import Testing
         var body: some View {
             WritableValueReader(probe: probe)
                 .container(container, scope: \Container.scope)
+        }
+    }
+
+    @MainActor private struct InitialValuesRoot: View {
+        let container: Container
+
+        let firstProbe: BindingProbe<Int>
+
+        let secondProbe: BindingProbe<Int>
+
+        var body: some View {
+            VStack {
+                InitialValueReader(probe: firstProbe)
+                InitialValueReader(probe: secondProbe)
+            }
+            .container(container, scope: \Container.scope)
         }
     }
 

@@ -38,6 +38,38 @@ import Testing
     }
 
     @Test
+    func initialProvidesIndependentWritableLocalValues() throws {
+        let connection: Connection<Int>.Writable = .initial(1)
+        let firstSession = connection.makeSession(())
+        let secondSession = connection.makeSession(())
+        var firstValues: [Int] = []
+        var secondValues: [Int] = []
+
+        let firstActivation = firstSession.activate {
+            if case let .value(value) = $0 {
+                firstValues.append(value)
+            }
+        }
+        let secondActivation = secondSession.activate {
+            if case let .value(value) = $0 {
+                secondValues.append(value)
+            }
+        }
+
+        let setFirstValue = try #require(firstSession.setValue)
+        setFirstValue(2)
+
+        #expect(firstActivation.initialValue == 1)
+        #expect(secondActivation.initialValue == 1)
+        #expect(firstActivation.cancellation == nil)
+        #expect(secondActivation.cancellation == nil)
+        #expect(firstSession.refresh() == nil)
+        #expect(secondSession.refresh() == nil)
+        #expect(firstValues == [2])
+        #expect(secondValues.isEmpty)
+    }
+
+    @Test
     func constantCanComposeMappingAndWriteRouting() {
         var writtenValues: [String] = []
         let connection: Connection<String>.Writable = .constant(42)
