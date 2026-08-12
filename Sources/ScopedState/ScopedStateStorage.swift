@@ -18,21 +18,21 @@ import Observation
         return state.value
     }
 
-    func setValue(
-        _ value: Value,
-        notifyingObservers: Bool,
-        valuesEqual: (Value, Value) -> Bool
-    ) {
-        if let currentValue = state.value, valuesEqual(currentValue, value) {
-            return
+    func valueEquals(_ other: Value, by areEquivalent: (Value, Value) -> Bool) -> Bool {
+        if let value = state.value {
+            areEquivalent(value, other)
+        } else {
+            false
         }
+    }
 
+    func setValue(_ newValue: Value, notifyingObservers: Bool) {
         if notifyingObservers {
             withMutation(keyPath: \.state) {
-                state = (value, state.generation &+ 1)
+                state = (newValue, state.generation &+ 1)
             }
         } else {
-            state = (value, state.generation &+ 1)
+            state = (newValue, state.generation &+ 1)
         }
     }
 

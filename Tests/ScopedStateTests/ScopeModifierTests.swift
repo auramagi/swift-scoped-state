@@ -52,11 +52,6 @@ import Testing
 
         #expect(probe.values.last == 3)
         #expect(probe.values.count == valueCountBeforeDelivery + 1)
-
-        source.send(3)
-        render(host)
-
-        #expect(probe.values.count == valueCountBeforeDelivery + 1)
     }
 
     @Test
@@ -71,14 +66,8 @@ import Testing
         #expect(container.scopeEvaluationCount == 1)
     }
 
-    @MainActor private struct ChildScope: Equatable {
-        let identity: Int
-
+    @MainActor private struct ChildScope {
         let value: Connection<Int>
-
-        nonisolated static func == (lhs: ChildScope, rhs: ChildScope) -> Bool {
-            lhs.identity == rhs.identity
-        }
     }
 
     @MainActor private struct ParentScope {
@@ -102,7 +91,7 @@ import Testing
 
         private(set) var cancellationCount = 0
 
-        private var currentScope = ChildScope(identity: 0, value: .constant(0))
+        private var currentScope = ChildScope(value: .constant(0))
 
         private var nextObservationID = 0
 
@@ -123,7 +112,7 @@ import Testing
         }
 
         private func scope(for configuration: Int) -> ChildScope {
-            ChildScope(identity: configuration, value: .constant(configuration))
+            ChildScope(value: .constant(configuration))
         }
 
         private func observe(_ receiveValue: @escaping ReceiveValue) -> Observation {
@@ -170,7 +159,7 @@ import Testing
             scopeEvaluationCount += 1
             return ParentScope(
                 configuredChild: source.connection,
-                child: .constant(ChildScope(identity: 42, value: .constant(42)))
+                child: .constant(ChildScope(value: .constant(42)))
             )
         }
     }

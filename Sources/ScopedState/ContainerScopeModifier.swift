@@ -35,11 +35,8 @@ import SwiftUI
                 return
             }
 
-            storage.setValue(
-                container[keyPath: keyPath],
-                notifyingObservers: false,
-                valuesEqual: { _, _ in false }
-            )
+            storage.setValue(container[keyPath: keyPath], notifyingObservers: false)
+
             self.container = container
             self.keyPath = keyPath
         }

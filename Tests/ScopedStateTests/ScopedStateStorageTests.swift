@@ -21,36 +21,32 @@ import Testing
 
         storage.setValue(
             1,
-            notifyingObservers: false,
-            valuesEqual: { _, _ in false }
+            notifyingObservers: false
         )
         #expect(storage.requiredValue == 1)
         #expect(storage.generation == 1)
 
         storage.setValue(
             1,
-            notifyingObservers: false,
-            valuesEqual: { _, _ in false }
+            notifyingObservers: false
         )
         #expect(storage.requiredValue == 1)
         #expect(storage.generation == 2)
 
         storage.setValue(
             2,
-            notifyingObservers: true,
-            valuesEqual: { _, _ in false }
+            notifyingObservers: true
         )
         #expect(storage.requiredValue == 2)
         #expect(storage.generation == 3)
     }
 
     @Test
-    func installationsAreSilentAndDeliveriesNotifyOnlyForChangedValues() {
+    func installationsAreSilentAndDeliveriesNotify() {
         let storage = ScopedStateStorage<Int>()
         storage.setValue(
             1,
-            notifyingObservers: false,
-            valuesEqual: ==
+            notifyingObservers: false
         )
 
         let notificationCount = OSAllocatedUnfairLock(initialState: 0)
@@ -62,25 +58,14 @@ import Testing
 
         storage.setValue(
             2,
-            notifyingObservers: false,
-            valuesEqual: ==
+            notifyingObservers: false
         )
         #expect(storage.requiredValue == 2)
-        #expect(notificationCount.withLock { $0 } == 0)
-
-        storage.setValue(
-            2,
-            notifyingObservers: true,
-            valuesEqual: ==
-        )
-        #expect(storage.requiredValue == 2)
-        #expect(storage.generation == 2)
         #expect(notificationCount.withLock { $0 } == 0)
 
         storage.setValue(
             3,
-            notifyingObservers: true,
-            valuesEqual: ==
+            notifyingObservers: true
         )
         #expect(storage.requiredValue == 3)
         #expect(storage.generation == 3)
@@ -92,8 +77,7 @@ import Testing
         let storage = ScopedStateStorage<Int>()
         storage.setValue(
             1,
-            notifyingObservers: false,
-            valuesEqual: ==
+            notifyingObservers: false
         )
 
         let notificationCount = OSAllocatedUnfairLock(initialState: 0)
@@ -111,7 +95,7 @@ import Testing
     }
 
     @Test
-    func equalValuesDoNotReplaceTheStoredValue() {
+    func comparesItsValueUsingTheProvidedEquality() {
         struct Value {
             let identity: Int
 
@@ -119,18 +103,25 @@ import Testing
         }
 
         let storage = ScopedStateStorage<Value>()
+
+        #expect(!storage.valueEquals(
+            Value(identity: 1, revision: 1),
+            by: { $0.identity == $1.identity }
+        ))
+
         storage.setValue(
             Value(identity: 1, revision: 1),
-            notifyingObservers: false,
-            valuesEqual: { $0.identity == $1.identity }
-        )
-        storage.setValue(
-            Value(identity: 1, revision: 2),
-            notifyingObservers: true,
-            valuesEqual: { $0.identity == $1.identity }
+            notifyingObservers: false
         )
 
-        #expect(storage.requiredValue.revision == 1)
+        #expect(storage.valueEquals(
+            Value(identity: 1, revision: 2),
+            by: { $0.identity == $1.identity }
+        ))
+        #expect(!storage.valueEquals(
+            Value(identity: 2, revision: 1),
+            by: { $0.identity == $1.identity }
+        ))
         #expect(storage.generation == 1)
     }
 
