@@ -27,7 +27,7 @@ extension GenericConnection {
                         }
                         return (
                             initialValue: transform(activation.initialValue),
-                            cancellation: activation.cancellation
+                            observation: activation.observation
                         )
                     },
                     refresh: {
@@ -67,7 +67,7 @@ extension GenericConnection where Configuration == Void {
     ) -> Connection<WrappedValue> {
         .init {
             .init { _ in
-                (initialValue: value, cancellation: nil)
+                (initialValue: value, observation: nil)
             }
         }
     }
@@ -87,7 +87,7 @@ extension GenericConnection where Configuration == Void {
             return .init(
                 activate: { yield in
                     yieldValue = { yield(.value($0)) }
-                    return (initialValue: initialValue, cancellation: nil)
+                    return (initialValue: initialValue, observation: nil)
                 },
                 setValue: {
                     yieldValue?($0)

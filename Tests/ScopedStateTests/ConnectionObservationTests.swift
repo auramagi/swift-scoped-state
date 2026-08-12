@@ -30,7 +30,7 @@ import Testing
         }
 
         #expect(activation.initialValue == 1)
-        #expect(activation.cancellation != nil)
+        #expect(activation.observation != nil)
         #expect(deliveredValues.isEmpty)
         #expect(session.refresh() == nil)
 
@@ -44,7 +44,7 @@ import Testing
         model.value = 3
         #expect(invalidationCount == 2)
 
-        activation.cancellation?.cancel()
+        activation.observation?.cancel()
         model.value = 4
 
         #expect(invalidationCount == 2)

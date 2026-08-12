@@ -42,7 +42,7 @@ import Testing
 
         var terminationIterator = termination.makeAsyncIterator()
         await Task.yield()
-        activation.cancellation?.cancel()
+        activation.observation?.cancel()
         #expect(await terminationIterator.next() != nil)
     }
 
@@ -74,7 +74,7 @@ import Testing
 
         updatesContinuation.yield(3)
         #expect(await receivedValuesIterator.next() == "value=3")
-        activation.cancellation?.cancel()
+        activation.observation?.cancel()
     }
 
     @Test
@@ -105,7 +105,7 @@ import Testing
 
         updatesContinuation.yield(3)
         #expect(await receivedValuesIterator.next() == 3)
-        activation.cancellation?.cancel()
+        activation.observation?.cancel()
     }
 
     @Test
@@ -130,9 +130,9 @@ import Testing
         let firstActivation = session.activate { _ in }
         #expect(source.observationCount == 1)
 
-        firstActivation.cancellation?.cancel()
+        firstActivation.observation?.cancel()
         let secondActivation = session.activate { _ in }
         #expect(source.observationCount == 2)
-        secondActivation.cancellation?.cancel()
+        secondActivation.observation?.cancel()
     }
 }

@@ -31,7 +31,7 @@ import Testing
         subject.send(2)
         #expect(deliveredValues == [2])
 
-        activation.cancellation?.cancel()
+        activation.observation?.cancel()
         subject.send(3)
         #expect(deliveredValues == [2])
     }
@@ -56,7 +56,7 @@ import Testing
         setValue?(2)
         #expect(subject.value == 2)
         #expect(receivedValues == [1, 2])
-        activation.cancellation?.cancel()
+        activation.observation?.cancel()
     }
 
     @Test
@@ -83,7 +83,7 @@ import Testing
         #expect(writtenValues == [2])
         #expect(subject.value == 1)
         #expect(receivedValues == [1])
-        activation.cancellation?.cancel()
+        activation.observation?.cancel()
     }
 
     @Test
@@ -103,7 +103,7 @@ import Testing
         receivedValues.append(activation.initialValue)
         subject.send(3)
         #expect(receivedValues == ["value=2", "value=3"])
-        activation.cancellation?.cancel()
+        activation.observation?.cancel()
     }
 
     @Test
@@ -131,7 +131,7 @@ import Testing
         #expect(writtenValues == ["replacement"])
         #expect(subject.value == 3)
         #expect(receivedValues == ["value=2", "value=3"])
-        activation.cancellation?.cancel()
+        activation.observation?.cancel()
     }
 
     @Test
@@ -155,7 +155,7 @@ import Testing
         publisher.send(3)
         #expect(deliveredValues == [3])
 
-        activation.cancellation?.cancel()
+        activation.observation?.cancel()
         publisher.send(4)
         #expect(deliveredValues == [3])
     }
@@ -187,7 +187,7 @@ import Testing
         publisher.send(3)
         #expect(writtenValues == [2])
         #expect(receivedValues == [1, 3])
-        activation.cancellation?.cancel()
+        activation.observation?.cancel()
     }
 
     @Test
@@ -217,7 +217,7 @@ import Testing
 
         publisher.send(3)
         #expect(receivedValues == [2, 3])
-        activation.cancellation?.cancel()
+        activation.observation?.cancel()
     }
 
     @Test
@@ -247,6 +247,6 @@ import Testing
         publisher.send(3)
         #expect(writtenValues == [2])
         #expect(receivedValues == [1, 3])
-        activation.cancellation?.cancel()
+        activation.observation?.cancel()
     }
 }

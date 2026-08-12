@@ -19,17 +19,17 @@
         case invalidate
     }
 
-    /// The value installed when observation starts and the token whose
+    /// The value installed when observation starts and the observation whose
     /// ownership transfers to ScopedState for the activation lifetime.
     public typealias Activation = (
         initialValue: Value,
-        cancellation: CancellationToken?
+        observation: CancellationToken?
     )
 
     /// Delivers updates produced after the active lifecycle operation returns.
     public typealias Yield = @MainActor (Update) -> Void
 
-    /// Starts observation and returns its initial value and cancellation.
+    /// Starts observation and returns its initial value and observation token.
     let activate: (@escaping Yield) -> Activation
 
     /// Optionally refreshes the current value without delivering an update.
@@ -68,7 +68,7 @@ extension ConnectionSession where Configuration == Void {
     }
 }
 
-@MainActor private final class ObservationActivation<State> {
+@MainActor private final class ActivationBuffer<State> {
     var state: State
 
     var isOngoing = true
@@ -92,7 +92,7 @@ private extension ConnectionSession {
                 let activation = activate { yield(.value($0)) }
                 return (
                     initialValue: activation.initialValue,
-                    cancellation: CancellationToken {
+                    observation: CancellationToken {
                         cancel(activation.observation)
                     }
                 )
@@ -111,7 +111,7 @@ extension ConnectionSession {
     ) {
         self = Self.observing(
             activate: { yield in
-                let activation = ObservationActivation(state: ())
+                let activation = ActivationBuffer(state: ())
                 let observation = observe { value in
                     guard !activation.isOngoing else { return }
                     yield(value)
@@ -134,7 +134,7 @@ extension ConnectionSession where Configuration == Void {
     ) {
         self = Self.observing(
             activate: { yield in
-                let activation = ObservationActivation(state: initialValue)
+                let activation = ActivationBuffer(state: initialValue)
                 let observation = observe { value in
                     if activation.isOngoing {
                         activation.state = value

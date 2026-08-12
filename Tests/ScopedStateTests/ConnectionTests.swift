@@ -16,7 +16,7 @@ import Testing
 
         let connection = ConfiguredConnection { configuration in
             ConfiguredConnection.Session { _ in
-                (initialValue: configuration.count, cancellation: nil)
+                (initialValue: configuration.count, observation: nil)
             } reconfigure: { _ in
             }
         }
@@ -36,7 +36,7 @@ import Testing
         let connection = ConfiguredConnection(
             makeSession: { _ in
                 ConfiguredConnection.Session { _ in
-                    (initialValue: 0, cancellation: nil)
+                    (initialValue: 0, observation: nil)
                 } reconfigure: { configuration in
                     updatedConfigurations.append(configuration)
                 }
@@ -65,7 +65,7 @@ import Testing
         let connection = ConfiguredConnection { configuration in
             ConfiguredConnection.Session(
                 activate: { _ in
-                    (initialValue: 0, cancellation: nil)
+                    (initialValue: 0, observation: nil)
                 },
                 reconfigure: { _ in },
                 setValue: { writes.append((configuration, $0)) }

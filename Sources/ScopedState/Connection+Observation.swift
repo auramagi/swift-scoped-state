@@ -69,7 +69,7 @@ extension GenericConnection where Configuration == Void {
                 activeObservation = observation
                 return (
                     initialValue: observation.read(),
-                    cancellation: CancellationToken {
+                    observation: CancellationToken {
                         observation.cancel()
                     }
                 )

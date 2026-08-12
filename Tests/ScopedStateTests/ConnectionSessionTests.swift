@@ -19,7 +19,7 @@ import Testing
             events.append("activate")
             return (
                 initialValue: 1,
-                cancellation: CancellationToken {
+                observation: CancellationToken {
                     events.append("cancel")
                 }
             )
@@ -36,7 +36,7 @@ import Testing
         #expect(activation.initialValue == 1)
         #expect(session.refresh() == nil)
         session.reconfigure(())
-        activation.cancellation?.cancel()
+        activation.observation?.cancel()
 
         #expect(events == ["activate", "refresh", "reconfigure", "cancel"])
     }
@@ -47,7 +47,7 @@ import Testing
 
         var writtenValues: [Int] = []
         let session = Session { _ in
-            (initialValue: 0, cancellation: nil)
+            (initialValue: 0, observation: nil)
         } setValue: {
             writtenValues.append($0)
         }

@@ -128,7 +128,7 @@ import SwiftUI
                     connection: connection,
                     valueBehavior: valueBehavior,
                     session: session,
-                    sessionObservation: activation.cancellation,
+                    sessionObservation: activation.observation,
                     valueObservation: nil,
                     configuration: configuration
                 )
@@ -139,7 +139,7 @@ import SwiftUI
                 let activation = context.session.activate(
                     makeYield(valueBehavior: context.valueBehavior)
                 )
-                self.context?.sessionObservation = activation.cancellation
+                self.context?.sessionObservation = activation.observation
                 self.context?.configuration = configuration
                 receive(activation.initialValue, notifyingObservers: false, valueBehavior: valueBehavior)
             } else if let context, let value = context.session.refresh() {

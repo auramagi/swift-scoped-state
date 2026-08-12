@@ -68,7 +68,7 @@ import UIKit
             .init { _ in
                 (
                     initialValue: self.value,
-                    cancellation: CancellationToken {
+                    observation: CancellationToken {
                         self.cancellationCount += 1
                     }
                 )

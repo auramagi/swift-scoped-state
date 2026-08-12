@@ -61,8 +61,8 @@ import Testing
 
         #expect(firstActivation.initialValue == 1)
         #expect(secondActivation.initialValue == 1)
-        #expect(firstActivation.cancellation == nil)
-        #expect(secondActivation.cancellation == nil)
+        #expect(firstActivation.observation == nil)
+        #expect(secondActivation.observation == nil)
         #expect(firstSession.refresh() == nil)
         #expect(secondSession.refresh() == nil)
         #expect(firstValues == [2])
@@ -142,8 +142,8 @@ import Testing
         setValue(3)
         #expect(writtenValues == [3])
 
-        readOnlyActivation.cancellation?.cancel()
-        writableActivation.cancellation?.cancel()
+        readOnlyActivation.observation?.cancel()
+        writableActivation.observation?.cancel()
         #expect(cancellationCount == 2)
     }
 
@@ -203,7 +203,7 @@ import Testing
                 SourceConnection.Session { _ in
                     (
                         initialValue: configuration.count,
-                        cancellation: CancellationToken {
+                        observation: CancellationToken {
                             cancellationCount += 1
                         }
                     )
@@ -221,11 +221,11 @@ import Testing
         let initialActivation = session.activate { _ in }
         #expect(initialActivation.initialValue == "value=7")
         #expect(session.refresh() == "value=2")
-        initialActivation.cancellation?.cancel()
+        initialActivation.observation?.cancel()
         session.reconfigure("updated")
         let updatedActivation = session.activate { _ in }
         #expect(updatedActivation.initialValue == "value=7")
-        updatedActivation.cancellation?.cancel()
+        updatedActivation.observation?.cancel()
 
         #expect(cancellationCount == 2)
     }
@@ -251,7 +251,7 @@ import Testing
         let initialActivation = session.activate { _ in }
 
         currentValue = 2
-        initialActivation.cancellation?.cancel()
+        initialActivation.observation?.cancel()
         session.reconfigure("updated")
         let updatedActivation = session.activate { _ in }
 
@@ -261,7 +261,7 @@ import Testing
         #expect(observationCount == 2)
         #expect(cancellationCount == 1)
 
-        updatedActivation.cancellation?.cancel()
+        updatedActivation.observation?.cancel()
         #expect(cancellationCount == 2)
     }
 }
