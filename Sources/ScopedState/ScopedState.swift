@@ -5,7 +5,6 @@
 //  Created by Mikhail Apurin on 2026-08-07.
 //
 
-import Combine
 import SwiftUI
 
 @MainActor @propertyWrapper public struct ScopedState<Scope, Configuration, Connected: ConnectedValue>: @MainActor DynamicProperty {
@@ -159,7 +158,7 @@ import SwiftUI
 
     private let valueBehavior: ValueBehavior
 
-    private init(
+    init(
         _ keyPath: KeyPath<Scope, GenericConnection<Configuration, Connected>>,
         configuration: Configuration,
         valueBehavior: ValueBehavior
@@ -184,20 +183,6 @@ import SwiftUI
     }
 
     public init(
-        _ keyPath: KeyPath<Scope, GenericConnection<Configuration, Connected>>,
-        configuration: Configuration
-    ) where Connected.WrappedValue: ObservableObject {
-        self.init(keyPath, configuration: configuration, valueBehavior: .observableObject)
-    }
-
-    public init(
-        _ keyPath: KeyPath<Scope, GenericConnection<Configuration, Connected>>,
-        configuration: Configuration
-    ) where Connected.WrappedValue: ObservableObject & Equatable {
-        self.init(keyPath, configuration: configuration, valueBehavior: .observableObject)
-    }
-
-    public init(
         _ keyPath: KeyPath<Scope, GenericConnection<Configuration, Connected>>
     ) where Configuration == Void {
         self.init(keyPath, configuration: (), valueBehavior: .default)
@@ -207,18 +192,6 @@ import SwiftUI
         _ keyPath: KeyPath<Scope, GenericConnection<Configuration, Connected>>
     ) where Configuration == Void, Connected.WrappedValue: Equatable {
         self.init(keyPath, configuration: (), valueBehavior: .equatable)
-    }
-
-    public init(
-        _ keyPath: KeyPath<Scope, GenericConnection<Configuration, Connected>>
-    ) where Configuration == Void, Connected.WrappedValue: ObservableObject {
-        self.init(keyPath, configuration: (), valueBehavior: .observableObject)
-    }
-
-    public init(
-        _ keyPath: KeyPath<Scope, GenericConnection<Configuration, Connected>>
-    ) where Configuration == Void, Connected.WrappedValue: ObservableObject & Equatable {
-        self.init(keyPath, configuration: (), valueBehavior: .observableObject)
     }
 
     public func update() {
@@ -259,22 +232,6 @@ private extension ScopedState.ValueBehavior where Connected.WrappedValue: Equata
         Self(
             valuesEqual: { $0 == $1 },
             observeChanges: nil
-        )
-    }
-}
-
-private extension ScopedState.ValueBehavior where Connected.WrappedValue: ObservableObject {
-    static var observableObject: Self {
-        Self(
-            valuesEqual: { $0 === $1 },
-            observeChanges: { value, invalidate in
-                let observation = value.objectWillChange.sink { _ in
-                    invalidate()
-                }
-                return CancellationToken {
-                    observation.cancel()
-                }
-            }
         )
     }
 }
