@@ -3,7 +3,7 @@
 import PackageDescription
 
 let package = Package(
-    name: "ScopedState",
+    name: "swift-scoped-state",
     platforms: [
         .iOS(.v17),
         .macOS(.v14),
