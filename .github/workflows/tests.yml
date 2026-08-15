@@ -1,0 +1,51 @@
+name: Tests
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tests-${{ github.workflow }}-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  test:
+    name: ${{ matrix.platform }}
+    runs-on: macos-26
+    timeout-minutes: 15
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: macOS
+            destination: platform=macOS
+          - platform: iOS
+            destination: platform=iOS Simulator,name=iPhone 17 Pro,OS=latest
+
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_26.6.app/Contents/Developer
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Run tests
+        run: |
+          xcodebuild test \
+            -workspace ScopedState.xcworkspace \
+            -scheme ScopedState \
+            -destination '${{ matrix.destination }}' \
+            -destination-timeout 120 \
+            -onlyUsePackageVersionsFromResolvedFile \
+            CODE_SIGNING_ALLOWED=NO
