@@ -44,7 +44,7 @@ jobs:
         run: |
           xcodebuild test \
             -workspace ScopedState.xcworkspace \
-            -scheme ScopedState \
+            -scheme ScopedStateTests \
             -destination '${{ matrix.destination }}' \
             -destination-timeout 120 \
             -onlyUsePackageVersionsFromResolvedFile \
