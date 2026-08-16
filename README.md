@@ -40,7 +40,7 @@ The complete path from scope declaration to environment injection stays compact.
 
 ```swift
 @MainActor struct HomeScope {
-    let room: ConfiguredConnection<RoomScope, Room.ID>
+    let roomScope: ConfiguredConnection<RoomScope, Room.ID>
 }
 
 @MainActor struct RoomScope {
@@ -59,11 +59,19 @@ struct RoomView: View {
     }
 }
 
-ForEach(rooms) { room in
-    RoomView()
-        .scope(\HomeScope.room, configuration: room.id)
+struct HomeView: View {
+    @State private var container = HomeContainer()
+
+    let rooms: [Room]
+
+    var body: some View {
+        ForEach(rooms) { room in
+            RoomView()
+                .scope(\HomeScope.roomScope, configuration: room.id)
+        }
+        .container(container, scope: \.homeScope)
+    }
 }
-.container(container, scope: \.homeScope)
 ```
 
 ## Getting Started
@@ -97,7 +105,7 @@ Add the `ScopedState` product to your target. Choose the dependency rule appropr
 Add ScopedState to the package dependencies in `Package.swift`.
 
 ```swift
-.package(url: "https://github.com/auramagi/swift-scoped-state", from: "0.1.0-b.6"),
+.package(url: "https://github.com/auramagi/swift-scoped-state", from: "0.1.0-b.7"),
 ```
 
 Then add the `ScopedState` product to the dependencies of your target.
@@ -166,10 +174,7 @@ struct ContentView: View {
 
 ```swift
 @MainActor struct AppScope {
-    let addTodo: Connection<() -> Void>
-
-    let todos: Connection<[Todo.ID]>
-
+    // ...
     let todoScope: ConfiguredConnection<TodoScope, Todo.ID>
 }
 
