@@ -7,6 +7,29 @@
 
 import SwiftUI
 
+/// A SwiftUI property wrapper for state connected through an environment scope.
+///
+/// Select a connection with a static key path. The wrapper establishes the
+/// connection as part of SwiftUI's state lifecycle and exposes its current
+/// value to the view.
+///
+/// ```swift
+/// @MainActor struct SettingsScope {
+///     let isEnabled: WritableConnection<Bool>
+/// }
+///
+/// struct SettingsView: View {
+///     @ScopedState(\SettingsScope.isEnabled) private var isEnabled
+///
+///     var body: some View {
+///         Toggle("Enabled", isOn: $isEnabled)
+///     }
+/// }
+/// ```
+///
+/// Provide the scope above the consuming view with
+/// ``SwiftUICore/View/container(_:scope:)`` or derive it from a parent scope
+/// with ``SwiftUICore/View/scope(_:)``.
 @MainActor @propertyWrapper public struct ScopedState<Scope, Configuration: Equatable, Value, Projection: ValueProjection>: @MainActor DynamicProperty where Value == Projection.Value {
     typealias Session = ConnectionSession<Configuration, Value>
 
@@ -210,6 +233,11 @@ import SwiftUI
         )
     }
 
+    /// Creates writable scoped state from a configured writable connection.
+    ///
+    /// - Parameters:
+    ///   - keyPath: The key path to the connection in its scope.
+    ///   - configuration: The configuration used to establish the connection.
     public init(
         _ keyPath: KeyPath<Scope, WritableConfiguredConnection<Value, Configuration>>,
         configuration: Configuration
@@ -217,6 +245,12 @@ import SwiftUI
         self.init(keyPath, configuration: configuration, valueBehavior: .default)
     }
 
+    /// Creates writable scoped state from a configured writable connection,
+    /// coalescing equivalent values.
+    ///
+    /// - Parameters:
+    ///   - keyPath: The key path to the connection in its scope.
+    ///   - configuration: The configuration used to establish the connection.
     public init(
         _ keyPath: KeyPath<Scope, WritableConfiguredConnection<Value, Configuration>>,
         configuration: Configuration
@@ -224,18 +258,30 @@ import SwiftUI
         self.init(keyPath, configuration: configuration, valueBehavior: .equatable)
     }
 
+    /// Creates writable scoped state from an unconfigured writable connection.
+    ///
+    /// - Parameter keyPath: The key path to the connection in its scope.
     public init(
         _ keyPath: KeyPath<Scope, WritableConnection<Value>>
     ) where Configuration == EmptyConfiguration, Projection == ReadWriteValueProjection<Value> {
         self.init(keyPath, configuration: .init())
     }
 
+    /// Creates writable scoped state from an unconfigured writable connection,
+    /// coalescing equivalent values.
+    ///
+    /// - Parameter keyPath: The key path to the connection in its scope.
     public init(
         _ keyPath: KeyPath<Scope, WritableConnection<Value>>
     ) where Configuration == EmptyConfiguration, Projection == ReadWriteValueProjection<Value>, Value: Equatable {
         self.init(keyPath, configuration: .init())
     }
 
+    /// Creates read-only scoped state from a configured connection.
+    ///
+    /// - Parameters:
+    ///   - keyPath: The key path to the connection in its scope.
+    ///   - configuration: The configuration used to establish the connection.
     public init(
         _ keyPath: KeyPath<Scope, ConfiguredConnection<Value, Configuration>>,
         configuration: Configuration
@@ -243,6 +289,12 @@ import SwiftUI
         self.init(keyPath, configuration: configuration, valueBehavior: .default)
     }
 
+    /// Creates read-only scoped state from a configured connection, coalescing
+    /// equivalent values.
+    ///
+    /// - Parameters:
+    ///   - keyPath: The key path to the connection in its scope.
+    ///   - configuration: The configuration used to establish the connection.
     public init(
         _ keyPath: KeyPath<Scope, ConfiguredConnection<Value, Configuration>>,
         configuration: Configuration
@@ -250,18 +302,29 @@ import SwiftUI
         self.init(keyPath, configuration: configuration, valueBehavior: .equatable)
     }
 
+    /// Creates read-only scoped state from an unconfigured connection.
+    ///
+    /// - Parameter keyPath: The key path to the connection in its scope.
     public init(
         _ keyPath: KeyPath<Scope, Connection<Value>>
     ) where Configuration == EmptyConfiguration, Projection == ReadOnlyValueProjection<Value> {
         self.init(keyPath, configuration: .init())
     }
 
+    /// Creates read-only scoped state from an unconfigured connection,
+    /// coalescing equivalent values.
+    ///
+    /// - Parameter keyPath: The key path to the connection in its scope.
     public init(
         _ keyPath: KeyPath<Scope, Connection<Value>>
     ) where Configuration == EmptyConfiguration, Projection == ReadOnlyValueProjection<Value>, Value: Equatable {
         self.init(keyPath, configuration: .init())
     }
 
+    /// Updates the active connection from the current SwiftUI environment.
+    ///
+    /// SwiftUI calls this method before evaluating a view's body. Don't call it
+    /// directly.
     public func update() {
         coordinator.update(
             scopeStorage: scope,
@@ -275,10 +338,16 @@ import SwiftUI
         coordinator.storage
     }
 
+    /// The current value delivered by the connection.
     public var wrappedValue: Value {
         coordinator.storage.requiredValue
     }
 
+    /// The projection associated with the connection's read/write capability.
+    ///
+    /// Writable connections expose a `Binding<Value>`. Read-only object
+    /// connections expose ``ScopedStateProjection`` for bindings to writable
+    /// members without allowing replacement of the root object.
     public var projectedValue: Projection.ProjectedValue {
         Projection.transformProjection(
             ScopedStateProjection(base: $coordinator.value)

@@ -57,8 +57,29 @@ import SwiftUI
     }
 }
 
+/// Adds root-scope provision to SwiftUI views.
 extension View {
-    /// Establishes a scope from an externally owned container.
+    /// Provides a scope from an externally owned container.
+    ///
+    /// Keep the container at a stable identity, commonly with `@State`, and
+    /// select the scope it provides with a key path.
+    ///
+    /// ```swift
+    /// struct RootView: View {
+    ///     @State private var container = AppContainer()
+    ///
+    ///     var body: some View {
+    ///         ContentView()
+    ///             .container(container, scope: \.appScope)
+    ///     }
+    /// }
+    /// ```
+    ///
+    /// - Parameters:
+    ///   - container: The reference-type container that owns the scope
+    ///     implementation.
+    ///   - scope: A key path to the scope provided to descendant views.
+    /// - Returns: A view that provides the selected scope to its subtree.
     @MainActor public func container<Container: AnyObject, Scope>(
         _ container: Container,
         scope: KeyPath<Container, Scope>

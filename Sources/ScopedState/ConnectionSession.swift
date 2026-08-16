@@ -5,9 +5,23 @@
 //  Created by Mikhail Apurin on 2026-08-10.
 //
 
-/// A configurable session connecting scoped state to an external
-/// implementation.
-/// Its closures retain any implementation object needed to keep the value alive.
+/// An active interface between one scoped property and an external implementation.
+///
+/// A connection definition creates a session when ``ScopedState`` resolves it.
+/// The session supplies a synchronous value, optionally observes later updates,
+/// and may accept writes. Its closures can retain any implementation objects
+/// needed for the connection lifetime.
+///
+/// ```swift
+/// let count: WritableConnection<Int> = .readWrite {
+///     ConnectionSession(
+///         activate: { _ in
+///             (initialValue: source.count, observation: nil)
+///         },
+///         setValue: { source.count = $0 }
+///     )
+/// }
+/// ```
 @MainActor public struct ConnectionSession<Configuration: Equatable, Value> {
     /// A change emitted by an active session.
     public enum Update {
@@ -40,6 +54,17 @@
 
     let setValue: ((Value) -> Void)?
 
+    /// Creates a configurable session from its lifecycle operations.
+    ///
+    /// - Parameters:
+    ///   - activate: Starts the connection and returns its synchronous value
+    ///     and optional observation token. Use the supplied yield closure for
+    ///     updates produced after activation.
+    ///   - refresh: Returns a refreshed value when one is available, or `nil`
+    ///     when no refresh is needed.
+    ///   - reconfigure: Updates the external implementation for a changed
+    ///     configuration before the next activation.
+    ///   - setValue: Receives values written through a writable connection.
     public init(
         activate: @escaping (@escaping Yield) -> Activation,
         refresh: @escaping () -> Value? = { nil },
@@ -54,6 +79,15 @@
 }
 
 extension ConnectionSession where Configuration == EmptyConfiguration {
+    /// Creates an unconfigured session from its lifecycle operations.
+    ///
+    /// - Parameters:
+    ///   - activate: Starts the connection and returns its synchronous value
+    ///     and optional observation token. Use the supplied yield closure for
+    ///     updates produced after activation.
+    ///   - refresh: Returns a refreshed value when one is available, or `nil`
+    ///     when no refresh is needed.
+    ///   - setValue: Receives values written through a writable connection.
     public init(
         activate: @escaping (@escaping Yield) -> Activation,
         refresh: @escaping () -> Value? = { nil },
@@ -103,6 +137,18 @@ private extension ConnectionSession {
 }
 
 extension ConnectionSession {
+    /// Creates a configurable session backed by an arbitrary observation token.
+    ///
+    /// The session starts observation before reading the current value. Values
+    /// delivered synchronously while observation starts are ignored in favor of
+    /// the subsequent current-value read.
+    ///
+    /// - Parameters:
+    ///   - currentValue: Reads the source's current value synchronously.
+    ///   - observe: Starts observation and returns its implementation-specific
+    ///     token.
+    ///   - cancel: Cancels a token returned by `observe`.
+    ///   - reconfigure: Updates the source for a changed configuration.
     public init<Observation>(
         currentValue: @escaping () -> Value,
         observe: @escaping (@escaping @MainActor (Value) -> Void) -> Observation,
@@ -127,6 +173,16 @@ extension ConnectionSession {
 }
 
 extension ConnectionSession where Configuration == EmptyConfiguration {
+    /// Creates an unconfigured session with an initial value and observation.
+    ///
+    /// If observation delivers values synchronously while it starts, the last
+    /// such value becomes the activation value.
+    ///
+    /// - Parameters:
+    ///   - initialValue: The value used before observation delivers an update.
+    ///   - observe: Starts observation and returns its implementation-specific
+    ///     token.
+    ///   - cancel: Cancels a token returned by `observe`.
     public init<Observation>(
         initialValue: Value,
         observe: @escaping (@escaping @MainActor (Value) -> Void) -> Observation,
@@ -150,6 +206,13 @@ extension ConnectionSession where Configuration == EmptyConfiguration {
         )
     }
 
+    /// Creates an unconfigured session backed by an arbitrary observation token.
+    ///
+    /// - Parameters:
+    ///   - currentValue: Reads the source's current value synchronously.
+    ///   - observe: Starts observation and returns its implementation-specific
+    ///     token.
+    ///   - cancel: Cancels a token returned by `observe`.
     public init<Observation>(
         currentValue: @escaping () -> Value,
         observe: @escaping (@escaping @MainActor (Value) -> Void) -> Observation,

@@ -13,6 +13,7 @@ ScopedState allows SwiftUI views to declare state connected to external sources 
 - [Getting Started](#getting-started)
   - [Requirements](#requirements)
   - [Installation](#installation)
+  - [Documentation](#documentation)
 - [Basic Usage](#basic-usage)
   - [Root Scope](#root-scope)
   - [Child Scopes](#child-scopes)
@@ -104,6 +105,10 @@ Then add the `ScopedState` product to the dependencies of your target.
 ```swift
 .product(name: "ScopedState", package: "swift-scoped-state")
 ```
+
+### Documentation
+
+- [ScopedState Documentation](https://auramagi.github.io/swift-scoped-state/documentation/scopedstate/)
 
 ## Basic Usage
 

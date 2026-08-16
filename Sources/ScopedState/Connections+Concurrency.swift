@@ -24,6 +24,11 @@ extension ConnectionDefinition where Self == Connections {
     /// Creates a read-only connection that starts with an initial value and
     /// then receives values from an asynchronous sequence.
     /// The sequence expression is evaluated whenever observation starts.
+    ///
+    /// - Parameters:
+    ///   - updates: The asynchronous sequence that delivers later values.
+    ///   - initialValue: The value available before the sequence delivers.
+    /// - Returns: A read-only concurrency-backed connection definition.
     public static func async<Updates: AsyncSequence, WrappedValue>(
         _ updates: @autoclosure @escaping () -> Updates,
         initialValue: WrappedValue
@@ -40,6 +45,11 @@ extension ConnectionDefinition where Self == Connections {
     /// Creates a read-only connection backed by an asynchronous
     /// sequence and a synchronous current-value getter.
     /// The sequence expression is evaluated whenever observation starts.
+    ///
+    /// - Parameters:
+    ///   - updates: The asynchronous sequence that delivers later values.
+    ///   - currentValue: A closure that synchronously reads the latest value.
+    /// - Returns: A read-only concurrency-backed connection definition.
     public static func async<Updates: AsyncSequence, WrappedValue>(
         _ updates: @autoclosure @escaping () -> Updates,
         currentValue: @escaping () -> WrappedValue
