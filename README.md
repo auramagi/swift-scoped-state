@@ -18,7 +18,7 @@ ScopedState allows SwiftUI views to declare state connected to external sources 
   - [Root Scope](#root-scope)
   - [Child Scopes](#child-scopes)
 - [How It Works](#how-it-works)
-  - [The `@ScopedState` Property Wrapper](#scopedstate-property-wrapper)
+  - [`@ScopedState` Property Wrapper](#scopedstate-property-wrapper)
   - [Scopes](#scopes)
   - [Connections](#connections)
   - [Connection Sources](#connection-sources)
