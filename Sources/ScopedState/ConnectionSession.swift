@@ -8,7 +8,7 @@
 /// A configurable session connecting scoped state to an external
 /// implementation.
 /// Its closures retain any implementation object needed to keep the value alive.
-@MainActor public struct ConnectionSession<Configuration, Value> {
+@MainActor public struct ConnectionSession<Configuration: Equatable, Value> {
     /// A change emitted by an active session.
     public enum Update {
         /// Installs a value delivered by an external source.

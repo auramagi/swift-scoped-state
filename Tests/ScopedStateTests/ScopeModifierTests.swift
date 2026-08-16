@@ -13,7 +13,7 @@ import Testing
 @Suite("Scope modifier")
 @MainActor struct ScopeModifierTests {
     @Test
-    func configuredScopeUpdatesItsExistingChannel() {
+    func configuredScopeUpdatesItsExistingSession() {
         let source = ConfiguredScopeSource()
         let container = Container(source: source)
         let probe = ValueProbe<Int>()

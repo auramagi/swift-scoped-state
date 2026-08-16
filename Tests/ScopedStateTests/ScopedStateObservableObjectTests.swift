@@ -81,6 +81,16 @@ import Testing
         #expect(flagProbe.values.last == false)
     }
 
+    @Test
+    func allObservableObjectInitializerFormsCompile() {
+        _ = ScopedState<InitializerScope, EmptyConfiguration, Model, ReadWriteValueProjection<Model>>(\.writableModel)
+        _ = ScopedState<InitializerScope, EmptyConfiguration, EquatableModel, ReadOnlyValueProjection<EquatableModel>>(\.readOnlyEquatableModel)
+        _ = ScopedState<InitializerScope, Int, Model, ReadOnlyValueProjection<Model>>(\.configuredReadOnlyModel, configuration: 1)
+        _ = ScopedState<InitializerScope, Int, Model, ReadWriteValueProjection<Model>>(\.configuredWritableModel, configuration: 1)
+        _ = ScopedState<InitializerScope, Int, EquatableModel, ReadOnlyValueProjection<EquatableModel>>(\.configuredReadOnlyEquatableModel, configuration: 1)
+        _ = ScopedState<InitializerScope, Int, EquatableModel, ReadWriteValueProjection<EquatableModel>>(\.configuredWritableEquatableModel, configuration: 1)
+    }
+
     @MainActor private final class Model: ObservableObject {
         @Published var flag: Bool
 
@@ -121,6 +131,20 @@ import Testing
 
     @MainActor private struct WritableScope {
         let model: WritableConnection<EquatableModel>
+    }
+
+    @MainActor private struct InitializerScope {
+        let writableModel: WritableConnection<Model>
+
+        let readOnlyEquatableModel: Connection<EquatableModel>
+
+        let configuredReadOnlyModel: ConfiguredConnection<Model, Int>
+
+        let configuredWritableModel: WritableConfiguredConnection<Model, Int>
+
+        let configuredReadOnlyEquatableModel: ConfiguredConnection<EquatableModel, Int>
+
+        let configuredWritableEquatableModel: WritableConfiguredConnection<EquatableModel, Int>
     }
 
     @MainActor private final class WritableContainer {

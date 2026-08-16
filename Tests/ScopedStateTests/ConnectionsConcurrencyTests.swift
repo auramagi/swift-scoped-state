@@ -8,7 +8,7 @@
 import Testing
 @testable import ScopedState
 
-@Suite("Concurrency connections")
+@Suite("Concurrency connections", .timeLimit(.minutes(1)))
 @MainActor struct ConnectionsConcurrencyTests {
     @Test
     @available(macOS 15.0, iOS 18.0, watchOS 11.0, tvOS 18.0, visionOS 2.0, *)

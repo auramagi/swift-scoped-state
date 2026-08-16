@@ -97,6 +97,108 @@ import Testing
     }
 
     @Test
+    func readOnlyProjectionDoesNotForwardRootReplacement() throws {
+        let model = ScopedStateTestModel(flag: false)
+        let container = Container(source: TestValueSource(0), model: model)
+        let probe = ObjectProbe()
+        let host = makeTestHost(
+            ReadOnlyWritableObjectReader(probe: probe)
+                .container(container, scope: \Container.scope)
+        )
+
+        let flag = try #require(probe.flag)
+        flag.wrappedValue = true
+        render(host)
+
+        #expect(model.flag)
+        #expect(container.modelSource.writtenValues.isEmpty)
+        #expect(probe.flags.last == true)
+    }
+
+    @Test
+    func readOnlyProjectionSupportsNonmutatingMembers() throws {
+        let model = ScopedStateTestModel(flag: false)
+        let container = Container(source: TestValueSource(0), model: model)
+        let probe = BindingProbe<Bool>()
+        let host = makeTestHost(
+            ControlsReader(probe: probe)
+                .container(container, scope: \Container.scope)
+        )
+
+        let flag = try #require(probe.binding)
+        flag.wrappedValue = true
+        render(host)
+
+        #expect(model.flag)
+        #expect(probe.values.last == true)
+    }
+
+    @Test
+    func writableProjectionSupportsDerivedBindings() throws {
+        let container = Container(source: TestValueSource(0))
+        let probe = BindingProbe<Bool>()
+        let host = makeTestHost(
+            InvertedFlagReader(probe: probe)
+                .container(container, scope: \Container.scope)
+        )
+
+        #expect(probe.values.last == true)
+        let invertedFlag = try #require(probe.binding)
+        invertedFlag.wrappedValue = false
+        render(host)
+
+        #expect(container.flagSource.value)
+        #expect(container.flagSource.writtenValues == [true])
+        #expect(probe.values.last == false)
+    }
+
+    @Test
+    func configuredWritableLeafForwardsRootReplacement() throws {
+        let container = Container(source: TestValueSource(0))
+        let probe = BindingProbe<Int>()
+        let host = makeTestHost(
+            ConfiguredValueReader(probe: probe)
+                .container(container, scope: \Container.scope)
+        )
+
+        #expect(probe.values.last == 7)
+        let value = try #require(probe.binding)
+        value.wrappedValue = 8
+        render(host)
+
+        #expect(container.configuredSource.writtenValues == [8])
+        #expect(probe.values.last == 8)
+    }
+
+    @Test
+    func changingKeyPathReplacesTheActiveConnection() {
+        let source = TestValueSource(1)
+        let container = Container(source: source)
+        let probe = ValueProbe<Int>()
+        let host = makeTestHost(
+            SelectedValueRoot(
+                container: container,
+                keyPath: \Scope.value,
+                probe: probe
+            )
+        )
+
+        #expect(probe.values.last == 1)
+        #expect(source.observationCount == 1)
+
+        host.rootView = SelectedValueRoot(
+            container: container,
+            keyPath: \Scope.secondValue,
+            probe: probe
+        )
+        render(host)
+
+        #expect(probe.values.last == 10)
+        #expect(source.cancellationCount == 1)
+        #expect(container.secondSource.observationCount == 1)
+    }
+
+    @Test
     func unobservedCurrentValueRefreshesDuringViewUpdates() {
         let source = TestValueSource(1)
         let container = Container(source: source)
@@ -190,9 +292,15 @@ import Testing
     @MainActor private struct Scope {
         let value: Connection<Int>
 
+        let secondValue: Connection<Int>
+
         let writableValue: WritableConnection<Int>
 
+        let writableFlag: WritableConnection<Bool>
+
         let readOnlyWritableValue: Connection<Int>
+
+        let readOnlyWritableModel: Connection<ScopedStateTestModel>
 
         let initialValue: WritableConnection<Int>
 
@@ -201,12 +309,24 @@ import Testing
         let observedInitialValue: Connection<Int>
 
         let model: Connection<ScopedStateTestModel>
+
+        let controls: Connection<NonmutatingControls>
+
+        let configuredValue: WritableConfiguredConnection<Int, Int>
     }
 
     @MainActor private final class Container {
         let source: TestValueSource<Int>
 
+        let secondSource = TestValueSource(10)
+
+        let flagSource = TestValueSource(false)
+
         let model: ScopedStateTestModel
+
+        let modelSource: TestValueSource<ScopedStateTestModel>
+
+        let configuredSource = ConfiguredValueSource()
 
         let updates = PassthroughSubject<Int, Never>()
 
@@ -218,19 +338,53 @@ import Testing
         ) {
             self.source = source
             self.model = model
+            self.modelSource = TestValueSource(model)
         }
 
         var scope: Scope {
             scopeEvaluationCount += 1
             return Scope(
                 value: source.readOnlyConnection,
+                secondValue: secondSource.readOnlyConnection,
                 writableValue: source.writableConnection,
+                writableFlag: flagSource.writableConnection,
                 readOnlyWritableValue: source.writableConnection,
+                readOnlyWritableModel: modelSource.writableConnection,
                 initialValue: .initial(1),
                 unobservedValue: source.unobservedConnection,
                 observedInitialValue: .publisher(updates, initialValue: 1),
-                model: .constant(model)
+                model: .constant(model),
+                controls: .constant(NonmutatingControls(model: model)),
+                configuredValue: configuredSource.connection
             )
+        }
+    }
+
+    @MainActor private final class ConfiguredValueSource {
+        private(set) var writtenValues: [Int] = []
+
+        private var yield: ConnectionSession<Int, Int>.Yield?
+
+        var connection: WritableConfiguredConnection<Int, Int> {
+            .readWrite { configuration in
+                ConnectionSession { yield in
+                    self.yield = yield
+                    return (initialValue: configuration, observation: nil)
+                } reconfigure: { _ in
+                } setValue: {
+                    self.writtenValues.append($0)
+                    self.yield?(.value($0))
+                }
+            }
+        }
+    }
+
+    @MainActor private struct NonmutatingControls {
+        let model: ScopedStateTestModel
+
+        var flag: Bool {
+            get { model.flag }
+            nonmutating set { model.flag = newValue }
         }
     }
 
@@ -300,6 +454,69 @@ import Testing
 
         var body: some View {
             let _ = probe.record(model, flag: $model.flag)
+            Color.clear
+        }
+    }
+
+    @MainActor private struct ReadOnlyWritableObjectReader: View {
+        @ScopedState(\Scope.readOnlyWritableModel) private var model
+
+        let probe: ObjectProbe
+
+        var body: some View {
+            let _ = probe.record(model, flag: $model.flag)
+            Color.clear
+        }
+    }
+
+    @MainActor private struct ControlsReader: View {
+        @ScopedState(\Scope.controls) private var controls
+
+        let probe: BindingProbe<Bool>
+
+        var body: some View {
+            let _ = probe.record(controls.flag, binding: $controls.flag)
+            Color.clear
+        }
+    }
+
+    @MainActor private struct InvertedFlagReader: View {
+        @ScopedState(\Scope.writableFlag) private var flag
+
+        let probe: BindingProbe<Bool>
+
+        var body: some View {
+            let _ = probe.record(flag.inverted, binding: $flag.inverted)
+            Color.clear
+        }
+    }
+
+    @MainActor private struct ConfiguredValueReader: View {
+        @ScopedState(\Scope.configuredValue, configuration: 7) private var value
+
+        let probe: BindingProbe<Int>
+
+        var body: some View {
+            let _ = probe.record(value, binding: $value)
+            Color.clear
+        }
+    }
+
+    @MainActor private struct SelectedValueReader: View {
+        @ScopedState<Scope, EmptyConfiguration, Int, ReadOnlyValueProjection<Int>> private var value: Int
+
+        let probe: ValueProbe<Int>
+
+        init(
+            keyPath: KeyPath<Scope, Connection<Int>>,
+            probe: ValueProbe<Int>
+        ) {
+            self._value = ScopedState(keyPath)
+            self.probe = probe
+        }
+
+        var body: some View {
+            let _ = probe.record(value)
             Color.clear
         }
     }
@@ -435,6 +652,19 @@ import Testing
             .container(container, scope: \Container.scope)
         }
     }
+
+    @MainActor private struct SelectedValueRoot: View {
+        let container: Container
+
+        let keyPath: KeyPath<Scope, Connection<Int>>
+
+        let probe: ValueProbe<Int>
+
+        var body: some View {
+            SelectedValueReader(keyPath: keyPath, probe: probe)
+                .container(container, scope: \Container.scope)
+        }
+    }
     #endif
 
     #if os(macOS)
@@ -460,6 +690,13 @@ import Testing
 
     init(flag: Bool) {
         self.flag = flag
+    }
+}
+
+private extension Bool {
+    var inverted: Bool {
+        get { !self }
+        set { self = !newValue }
     }
 }
 #endif

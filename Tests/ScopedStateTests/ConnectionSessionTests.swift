@@ -42,7 +42,7 @@ import Testing
     }
 
     @Test
-    func writableSessionForwardsWrites() {
+    func writableSessionForwardsWrites() throws {
         typealias Session = ConnectionSession<EmptyConfiguration, Int>
 
         var writtenValues: [Int] = []
@@ -52,10 +52,7 @@ import Testing
             writtenValues.append($0)
         }
 
-        guard let setValue = session.setValue else {
-            Issue.record("A writable session should expose its setter")
-            return
-        }
+        let setValue = try #require(session.setValue)
 
         setValue(2)
         setValue(3)
@@ -63,7 +60,7 @@ import Testing
     }
 
     @Test
-    func currentValueConveniencesManageObservationLifecycle() {
+    func currentValueConveniencesManageObservationLifecycle() throws {
         var currentValue = 1
         var writtenValues: [Int] = []
         var observationCount = 0
@@ -87,10 +84,7 @@ import Testing
         let writableSession = writable.makeSession(.init())
         #expect(readOnlySession.setValue == nil)
 
-        guard let setValue = writableSession.setValue else {
-            Issue.record("The writable convenience should expose its setter")
-            return
-        }
+        let setValue = try #require(writableSession.setValue)
 
         var readOnlyValues: [Int] = []
         var writableValues: [Int] = []

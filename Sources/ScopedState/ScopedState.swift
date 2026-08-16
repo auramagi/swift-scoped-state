@@ -70,7 +70,14 @@ import SwiftUI
                     preconditionFailure("Scoped state was written before DynamicProperty.update()")
                 }
 
-                if let setValue = context.session.setValue {
+                // SwiftUI derived bindings reassign their root even after a
+                // nonmutating member write. Only a writable projection should
+                // forward that replacement to the connected implementation.
+                if Projection.forwardsRootReplacement {
+                    guard let setValue = context.session.setValue else {
+                        preconditionFailure("A writable scoped state requires a writable connection")
+                    }
+
                     setValue(newValue)
                 } else {
                     applyValue(newValue, notifyingObservers: true, valueBehavior: context.valueBehavior)
