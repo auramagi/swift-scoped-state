@@ -14,7 +14,7 @@ import Testing
 @Suite("Scoped state ObservableObject support")
 @MainActor struct ScopedStateObservableObjectTests {
     @Test
-    func changesInvalidateReadOnlyConnectedValue() throws {
+    func changesInvalidateReadOnlyValue() throws {
         let model = Model(flag: false)
         let container = ReadOnlyContainer(model: model)
         let probe = BindingProbe<Bool>()

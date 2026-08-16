@@ -5,34 +5,34 @@
 //  Created by Mikhail Apurin on 2026-08-08.
 //
 
-public typealias Connection<WrappedValue> = GenericConnection<Void, ReadOnlyConnectedValue<WrappedValue>>
+public typealias Connection<Value> = GenericConnection<ReadOnlyValueDefinition<Void, Value>>
 
 extension Connection {
-    public typealias Configuration<NewConfiguration> = GenericConnection<NewConfiguration, Connected>
+    public typealias Configuration<NewConfiguration> = GenericConnection<ReadOnlyValueDefinition<NewConfiguration, Definition.Value>>
 
-    public typealias Writable = GenericConnection<Configuration, WritableConnectedValue<Connected.WrappedValue>>
+    public typealias Writable = GenericConnection<ReadWriteValueDefinition<Definition.Configuration, Definition.Value>>
 }
 
 /// The generic implementation underlying the public `Connection<Value>` family.
-@MainActor public struct GenericConnection<Configuration, Connected: ConnectedValue> {
-    public typealias Session = ConnectionSession<Configuration, Connected.WrappedValue>
+@MainActor public struct GenericConnection<Definition: ValueDefinition> {
+    public typealias Session = ConnectionSession<Definition.Configuration, Definition.Value>
 
-    let makeSession: (Configuration) -> Session
+    let makeSession: (Definition.Configuration) -> Session
 
-    let configurationsEqual: (Configuration, Configuration) -> Bool
+    let configurationsEqual: (Definition.Configuration, Definition.Configuration) -> Bool
 
     public init(
-        makeSession: @escaping (Configuration) -> Session,
-        configurationsEqual: @escaping (Configuration, Configuration) -> Bool
+        makeSession: @escaping (Definition.Configuration) -> Session,
+        configurationsEqual: @escaping (Definition.Configuration, Definition.Configuration) -> Bool
     ) {
         self.makeSession = makeSession
         self.configurationsEqual = configurationsEqual
     }
 }
 
-extension GenericConnection where Configuration: Equatable {
+extension GenericConnection where Definition.Configuration: Equatable {
     public init(
-        makeSession: @escaping (Configuration) -> Session
+        makeSession: @escaping (Definition.Configuration) -> Session
     ) {
         self.init(
             makeSession: makeSession,
@@ -41,7 +41,7 @@ extension GenericConnection where Configuration: Equatable {
     }
 }
 
-extension GenericConnection where Configuration == Void {
+extension GenericConnection where Definition.Configuration == Void {
     public init(
         makeSession: @escaping () -> Session
     ) {

@@ -71,9 +71,9 @@ import Testing
     }
 
     @MainActor private struct ParentScope {
-        let configuredChild: Connection<ChildScope>.Configuration<Int>
+        let configuredChild: Connection<ChildScope>.Configuration<Int>.Writable
 
-        let child: Connection<ChildScope>
+        let child: Connection<ChildScope>.Writable
     }
 
     @MainActor private final class ConfiguredScopeSource {
@@ -158,8 +158,8 @@ import Testing
         var scope: ParentScope {
             scopeEvaluationCount += 1
             return ParentScope(
-                configuredChild: source.connection,
-                child: .constant(ChildScope(value: .constant(42)))
+                configuredChild: source.connection.set { _ in },
+                child: .initial(ChildScope(value: .constant(42)))
             )
         }
     }

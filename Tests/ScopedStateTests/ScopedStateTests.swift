@@ -35,6 +35,23 @@ import Testing
     }
 
     @Test
+    func writableConnectionCanBeConsumedAsReadOnly() {
+        let source = TestValueSource(1)
+        let container = Container(source: source)
+        let probe = ValueProbe<Int>()
+        let host = makeTestHost(
+            ReadOnlyWritableRoot(container: container, probe: probe)
+        )
+
+        #expect(probe.values.last == 1)
+
+        source.send(2)
+        render(host)
+
+        #expect(probe.values.last == 2)
+    }
+
+    @Test
     func initialValuesAreLocalToEachConnectedProperty() throws {
         let container = Container(source: TestValueSource(0))
         let firstProbe = BindingProbe<Int>()
@@ -250,6 +267,18 @@ import Testing
         }
     }
 
+    @MainActor private struct ReadOnlyWritableValueReader: View {
+        @ScopedState<Scope, ReadWriteValueDefinition<Void, Int>, ReadOnlyValueProjection<Int>>(\Scope.writableValue) private var value
+
+        let probe: ValueProbe<Int>
+
+        var body: some View {
+            let _: ScopedStateProjection<Int> = $value
+            let _ = probe.record(value)
+            Color.clear
+        }
+    }
+
     @MainActor private struct InitialValueReader: View {
         @ScopedState(\Scope.initialValue) private var value
 
@@ -301,6 +330,17 @@ import Testing
 
         var body: some View {
             WritableValueReader(probe: probe)
+                .container(container, scope: \Container.scope)
+        }
+    }
+
+    @MainActor private struct ReadOnlyWritableRoot: View {
+        let container: Container
+
+        let probe: ValueProbe<Int>
+
+        var body: some View {
+            ReadOnlyWritableValueReader(probe: probe)
                 .container(container, scope: \Container.scope)
         }
     }
@@ -399,7 +439,7 @@ import Testing
     func writingProjectionBeforeUpdateFails() async {
         await #expect(processExitsWith: .failure) {
             await MainActor.run {
-                let state = ScopedState<ExitScope, Void, WritableConnectedValue<Int>>(\.value)
+                let state = ScopedState<ExitScope, ReadWriteValueDefinition<Void, Int>, ReadWriteValueProjection<Int>>(\.value)
                 state.projectedValue.wrappedValue = 1
             }
         }

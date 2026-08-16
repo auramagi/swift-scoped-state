@@ -7,13 +7,13 @@
 
 import SwiftUI
 
-@MainActor @propertyWrapper public struct ScopedState<Scope, Configuration, Connected: ConnectedValue>: @MainActor DynamicProperty {
-    private typealias Connection = GenericConnection<Configuration, Connected>
+@MainActor @propertyWrapper public struct ScopedState<Scope, Definition: ValueDefinition, Projection: ValueProjection>: @MainActor DynamicProperty where Definition.Value == Projection.Value {
+    private typealias Connection = GenericConnection<Definition>
 
     @MainActor struct ValueBehavior {
-        let areEquivalent: (_ lhs: Connected.WrappedValue, _ rhs: Connected.WrappedValue) -> Bool
+        let areEquivalent: (_ lhs: Definition.Value, _ rhs: Definition.Value) -> Bool
 
-        let makeObservation: ((_ value: Connected.WrappedValue, _ invalidate: @escaping @MainActor () -> Void) -> CancellationToken)?
+        let makeObservation: ((_ value: Definition.Value, _ invalidate: @escaping @MainActor () -> Void) -> CancellationToken)?
     }
 
     @MainActor private final class Coordinator {
@@ -44,14 +44,14 @@ import SwiftUI
 
             var valueObservation: CancellationToken?
 
-            var configuration: Configuration
+            var configuration: Definition.Configuration
         }
 
-        let storage = ScopedStateStorage<Connected.WrappedValue>()
+        let storage = ScopedStateStorage<Definition.Value>()
 
         private var context: Context?
 
-        var value: Connected.WrappedValue {
+        var value: Definition.Value {
             get {
                 storage.requiredValue
             }
@@ -83,7 +83,7 @@ import SwiftUI
         }
 
         private func applyValue(
-            _ value: Connected.WrappedValue,
+            _ value: Definition.Value,
             notifyingObservers: Bool,
             valueBehavior: ValueBehavior
         ) {
@@ -106,7 +106,7 @@ import SwiftUI
         func update(
             scopeStorage: ScopedStateStorage<Scope>,
             keyPath: KeyPath<Scope, Connection>,
-            configuration: Configuration,
+            configuration: Definition.Configuration,
             valueBehavior: ValueBehavior
         ) {
             let identity = Context.ConnectionIdentity(
@@ -154,13 +154,13 @@ import SwiftUI
 
     private let keyPath: KeyPath<Scope, Connection>
 
-    private let configuration: Configuration
+    private let configuration: Definition.Configuration
 
     private let valueBehavior: ValueBehavior
 
     init(
-        _ keyPath: KeyPath<Scope, GenericConnection<Configuration, Connected>>,
-        configuration: Configuration,
+        _ keyPath: KeyPath<Scope, GenericConnection<Definition>>,
+        configuration: Definition.Configuration,
         valueBehavior: ValueBehavior
     ) {
         self.keyPath = keyPath
@@ -169,28 +169,58 @@ import SwiftUI
     }
 
     public init(
-        _ keyPath: KeyPath<Scope, GenericConnection<Configuration, Connected>>,
-        configuration: Configuration
-    ) {
+        _ keyPath: KeyPath<Scope, GenericConnection<Definition>>,
+        configuration: Definition.Configuration
+    ) where Definition: WritableValueDefinition, Projection == ReadWriteValueProjection<Definition.Value> {
         self.init(keyPath, configuration: configuration, valueBehavior: .default)
     }
 
     public init(
-        _ keyPath: KeyPath<Scope, GenericConnection<Configuration, Connected>>,
-        configuration: Configuration
-    ) where Connected.WrappedValue: Equatable {
+        _ keyPath: KeyPath<Scope, GenericConnection<Definition>>,
+        configuration: Definition.Configuration
+    ) where Definition: WritableValueDefinition, Projection == ReadWriteValueProjection<Definition.Value>, Definition.Value: Equatable {
         self.init(keyPath, configuration: configuration, valueBehavior: .equatable)
     }
 
     public init(
-        _ keyPath: KeyPath<Scope, GenericConnection<Configuration, Connected>>
-    ) where Configuration == Void {
+        _ keyPath: KeyPath<Scope, GenericConnection<Definition>>
+    ) where Definition: WritableValueDefinition, Definition.Configuration == Void, Projection == ReadWriteValueProjection<Definition.Value> {
         self.init(keyPath, configuration: (), valueBehavior: .default)
     }
 
     public init(
-        _ keyPath: KeyPath<Scope, GenericConnection<Configuration, Connected>>
-    ) where Configuration == Void, Connected.WrappedValue: Equatable {
+        _ keyPath: KeyPath<Scope, GenericConnection<Definition>>
+    ) where Definition: WritableValueDefinition, Definition.Configuration == Void, Projection == ReadWriteValueProjection<Definition.Value>, Definition.Value: Equatable {
+        self.init(keyPath, configuration: (), valueBehavior: .equatable)
+    }
+
+    public init(
+        _ keyPath: KeyPath<Scope, GenericConnection<Definition>>,
+        configuration: Definition.Configuration,
+        readOnly: Void = ()
+    ) where Projection == ReadOnlyValueProjection<Definition.Value> {
+        self.init(keyPath, configuration: configuration, valueBehavior: .default)
+    }
+
+    public init(
+        _ keyPath: KeyPath<Scope, GenericConnection<Definition>>,
+        configuration: Definition.Configuration,
+        readOnly: Void = ()
+    ) where Projection == ReadOnlyValueProjection<Definition.Value>, Definition.Value: Equatable {
+        self.init(keyPath, configuration: configuration, valueBehavior: .equatable)
+    }
+
+    public init(
+        _ keyPath: KeyPath<Scope, GenericConnection<Definition>>,
+        readOnly: Void = ()
+    ) where Definition.Configuration == Void, Projection == ReadOnlyValueProjection<Definition.Value> {
+        self.init(keyPath, configuration: (), valueBehavior: .default)
+    }
+
+    public init(
+        _ keyPath: KeyPath<Scope, GenericConnection<Definition>>,
+        readOnly: Void = ()
+    ) where Definition.Configuration == Void, Projection == ReadOnlyValueProjection<Definition.Value>, Definition.Value: Equatable {
         self.init(keyPath, configuration: (), valueBehavior: .equatable)
     }
 
@@ -203,16 +233,16 @@ import SwiftUI
         )
     }
 
-    var storage: ScopedStateStorage<Connected.WrappedValue> {
+    var storage: ScopedStateStorage<Definition.Value> {
         coordinator.storage
     }
 
-    public var wrappedValue: Connected.WrappedValue {
+    public var wrappedValue: Definition.Value {
         coordinator.storage.requiredValue
     }
 
-    public var projectedValue: Connected.Projection {
-        Connected.transformProjection(
+    public var projectedValue: Projection.ProjectedValue {
+        Projection.transformProjection(
             ScopedStateProjection(base: $coordinator.value)
         )
     }
@@ -227,7 +257,7 @@ private extension ScopedState.ValueBehavior {
     }
 }
 
-private extension ScopedState.ValueBehavior where Connected.WrappedValue: Equatable {
+private extension ScopedState.ValueBehavior where Definition.Value: Equatable {
     static var equatable: Self {
         Self(
             areEquivalent: { $0 == $1 },

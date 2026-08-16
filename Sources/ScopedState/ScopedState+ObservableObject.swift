@@ -7,41 +7,71 @@
 
 import Combine
 
-extension ScopedState where Connected.WrappedValue: ObservableObject {
+extension ScopedState where Definition.Value: ObservableObject {
     public init(
-        _ keyPath: KeyPath<Scope, GenericConnection<Configuration, Connected>>,
-        configuration: Configuration
-    ) {
+        _ keyPath: KeyPath<Scope, GenericConnection<Definition>>,
+        configuration: Definition.Configuration
+    ) where Definition: WritableValueDefinition, Projection == ReadWriteValueProjection<Definition.Value> {
+        self.init(keyPath, configuration: configuration, valueBehavior: .observableObject)
+    }
+
+    public init(
+        _ keyPath: KeyPath<Scope, GenericConnection<Definition>>,
+        configuration: Definition.Configuration,
+        readOnly: Void = ()
+    ) where Projection == ReadOnlyValueProjection<Definition.Value> {
         self.init(keyPath, configuration: configuration, valueBehavior: .observableObject)
     }
 }
 
-extension ScopedState where Connected.WrappedValue: ObservableObject & Equatable {
+extension ScopedState where Definition.Value: ObservableObject & Equatable {
     public init(
-        _ keyPath: KeyPath<Scope, GenericConnection<Configuration, Connected>>,
-        configuration: Configuration
-    ) {
+        _ keyPath: KeyPath<Scope, GenericConnection<Definition>>,
+        configuration: Definition.Configuration
+    ) where Definition: WritableValueDefinition, Projection == ReadWriteValueProjection<Definition.Value> {
+        self.init(keyPath, configuration: configuration, valueBehavior: .observableObject)
+    }
+
+    public init(
+        _ keyPath: KeyPath<Scope, GenericConnection<Definition>>,
+        configuration: Definition.Configuration,
+        readOnly: Void = ()
+    ) where Projection == ReadOnlyValueProjection<Definition.Value> {
         self.init(keyPath, configuration: configuration, valueBehavior: .observableObject)
     }
 }
 
-extension ScopedState where Configuration == Void, Connected.WrappedValue: ObservableObject {
+extension ScopedState where Definition.Configuration == Void, Definition.Value: ObservableObject {
     public init(
-        _ keyPath: KeyPath<Scope, GenericConnection<Configuration, Connected>>
-    ) {
+        _ keyPath: KeyPath<Scope, GenericConnection<Definition>>
+    ) where Definition: WritableValueDefinition, Projection == ReadWriteValueProjection<Definition.Value> {
+        self.init(keyPath, configuration: (), valueBehavior: .observableObject)
+    }
+
+    public init(
+        _ keyPath: KeyPath<Scope, GenericConnection<Definition>>,
+        readOnly: Void = ()
+    ) where Projection == ReadOnlyValueProjection<Definition.Value> {
         self.init(keyPath, configuration: (), valueBehavior: .observableObject)
     }
 }
 
-extension ScopedState where Configuration == Void, Connected.WrappedValue: ObservableObject & Equatable {
+extension ScopedState where Definition.Configuration == Void, Definition.Value: ObservableObject & Equatable {
     public init(
-        _ keyPath: KeyPath<Scope, GenericConnection<Configuration, Connected>>
-    ) {
+        _ keyPath: KeyPath<Scope, GenericConnection<Definition>>
+    ) where Definition: WritableValueDefinition, Projection == ReadWriteValueProjection<Definition.Value> {
+        self.init(keyPath, configuration: (), valueBehavior: .observableObject)
+    }
+
+    public init(
+        _ keyPath: KeyPath<Scope, GenericConnection<Definition>>,
+        readOnly: Void = ()
+    ) where Projection == ReadOnlyValueProjection<Definition.Value> {
         self.init(keyPath, configuration: (), valueBehavior: .observableObject)
     }
 }
 
-private extension ScopedState.ValueBehavior where Connected.WrappedValue: ObservableObject {
+private extension ScopedState.ValueBehavior where Definition.Value: ObservableObject {
     static var observableObject: Self {
         Self(
             areEquivalent: { $0 === $1 },

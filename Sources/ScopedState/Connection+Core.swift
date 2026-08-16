@@ -8,9 +8,9 @@
 extension GenericConnection {
     /// Transforms every value delivered by this connection while preserving
     /// its configuration and lifecycle behavior.
-    public func map<WrappedValue, MappedValue>(
-        _ transform: @escaping (WrappedValue) -> MappedValue
-    ) -> GenericConnection<Configuration, ReadOnlyConnectedValue<MappedValue>> where Connected == ReadOnlyConnectedValue<WrappedValue> {
+    public func map<Configuration, Value, MappedValue>(
+        _ transform: @escaping (Value) -> MappedValue
+    ) -> GenericConnection<ReadOnlyValueDefinition<Configuration, MappedValue>> where Definition == ReadOnlyValueDefinition<Configuration, Value> {
         .init(
             makeSession: { configuration in
                 let session = makeSession(configuration)
@@ -41,9 +41,9 @@ extension GenericConnection {
     }
 
     /// Adds a write operation to a read-only connection.
-    public func set<WrappedValue>(
-        _ setValue: @escaping (WrappedValue) -> Void
-    ) -> GenericConnection<Configuration, WritableConnectedValue<WrappedValue>> where Connected == ReadOnlyConnectedValue<WrappedValue> {
+    public func set<Configuration, Value>(
+        _ setValue: @escaping (Value) -> Void
+    ) -> GenericConnection<ReadWriteValueDefinition<Configuration, Value>> where Definition == ReadOnlyValueDefinition<Configuration, Value> {
         .init(
             makeSession: { configuration in
                 let session = makeSession(configuration)
@@ -60,7 +60,7 @@ extension GenericConnection {
     }
 }
 
-extension GenericConnection where Configuration == Void {
+extension GenericConnection where Definition.Configuration == Void {
     /// Creates a read-only connection that always provides the same value.
     public static func constant<WrappedValue>(
         _ value: WrappedValue
