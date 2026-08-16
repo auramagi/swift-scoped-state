@@ -35,7 +35,7 @@ import Testing
         let activation = session.activate { _ in }
         #expect(activation.initialValue == 1)
         #expect(session.refresh() == nil)
-        session.reconfigure(())
+        session.reconfigure(.init())
         activation.observation?.cancel()
 
         #expect(events == ["activate", "refresh", "reconfigure", "cancel"])

@@ -51,7 +51,7 @@ import Observation
     }
 }
 
-extension GenericConnection where Definition.Configuration == Void {
+extension GenericConnection where Definition.Configuration == EmptyConfiguration {
     /// Creates a read-only connection to values tracked by Observation.
     ///
     /// Changes to tracked properties must be made on the main actor.

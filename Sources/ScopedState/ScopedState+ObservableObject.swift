@@ -41,33 +41,33 @@ extension ScopedState where Definition.Value: ObservableObject & Equatable {
     }
 }
 
-extension ScopedState where Definition.Configuration == Void, Definition.Value: ObservableObject {
+extension ScopedState where Definition.Configuration == EmptyConfiguration, Definition.Value: ObservableObject {
     public init(
         _ keyPath: KeyPath<Scope, GenericConnection<Definition>>
     ) where Definition: WritableValueDefinition, Projection == ReadWriteValueProjection<Definition.Value> {
-        self.init(keyPath, configuration: (), valueBehavior: .observableObject)
+        self.init(keyPath, configuration: .init(), valueBehavior: .observableObject)
     }
 
     public init(
         _ keyPath: KeyPath<Scope, GenericConnection<Definition>>,
         readOnly: Void = ()
     ) where Projection == ReadOnlyValueProjection<Definition.Value> {
-        self.init(keyPath, configuration: (), valueBehavior: .observableObject)
+        self.init(keyPath, configuration: .init(), valueBehavior: .observableObject)
     }
 }
 
-extension ScopedState where Definition.Configuration == Void, Definition.Value: ObservableObject & Equatable {
+extension ScopedState where Definition.Configuration == EmptyConfiguration, Definition.Value: ObservableObject & Equatable {
     public init(
         _ keyPath: KeyPath<Scope, GenericConnection<Definition>>
     ) where Definition: WritableValueDefinition, Projection == ReadWriteValueProjection<Definition.Value> {
-        self.init(keyPath, configuration: (), valueBehavior: .observableObject)
+        self.init(keyPath, configuration: .init(), valueBehavior: .observableObject)
     }
 
     public init(
         _ keyPath: KeyPath<Scope, GenericConnection<Definition>>,
         readOnly: Void = ()
     ) where Projection == ReadOnlyValueProjection<Definition.Value> {
-        self.init(keyPath, configuration: (), valueBehavior: .observableObject)
+        self.init(keyPath, configuration: .init(), valueBehavior: .observableObject)
     }
 }
 

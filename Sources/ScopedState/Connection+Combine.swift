@@ -7,7 +7,7 @@
 
 import Combine
 
-extension GenericConnection where Definition.Configuration == Void {
+extension GenericConnection where Definition.Configuration == EmptyConfiguration {
     /// Creates a read-only connection to a current-value subject.
     public static func subject<WrappedValue>(
         _ subject: CurrentValueSubject<WrappedValue, Never>

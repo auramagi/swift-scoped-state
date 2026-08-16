@@ -16,7 +16,7 @@ import Testing
     func expressionInvalidatesThenRefreshesItsCurrentValue() {
         let model = Model(value: 1)
         let connection: Connection<Int> = .observation { model.value }
-        let session = connection.makeSession(())
+        let session = connection.makeSession(.init())
 
         var deliveredValues: [Int] = []
         var invalidationCount = 0
@@ -58,7 +58,7 @@ import Testing
         let connection: Connection<Int> = .observation {
             firstModel.value + secondModel.value
         }
-        let session = connection.makeSession(())
+        let session = connection.makeSession(.init())
 
         var invalidationCount = 0
         let activation = session.activate {
@@ -82,7 +82,7 @@ import Testing
     func readOnlyKeyPathTracksOnlyThatProperty() {
         let model = Model(value: 1)
         let connection: Connection<Int> = .observation(model, \Model.value)
-        let session = connection.makeSession(())
+        let session = connection.makeSession(.init())
 
         var invalidationCount = 0
         let activation = session.activate {
@@ -105,7 +105,7 @@ import Testing
     func writableKeyPathInfersPropertyMutation() {
         let model = Model(value: 1)
         let connection: Connection<Int>.Writable = .observation(model, \Model.value)
-        let session = connection.makeSession(())
+        let session = connection.makeSession(.init())
 
         var invalidationCount = 0
         let activation = session.activate {
@@ -128,7 +128,7 @@ import Testing
             .observation { model.value }
             .map(String.init)
             .set { model.value = Int($0) ?? 0 }
-        let session = connection.makeSession(())
+        let session = connection.makeSession(.init())
 
         var invalidationCount = 0
         let activation = session.activate {

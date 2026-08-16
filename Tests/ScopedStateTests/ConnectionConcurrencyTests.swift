@@ -24,7 +24,7 @@ import Testing
             updates,
             initialValue: 1
         )
-        let session = connection.makeSession(())
+        let session = connection.makeSession(.init())
 
         let (receivedValues, receivedValuesContinuation) = AsyncStream.makeStream(of: Int.self)
         var receivedValuesIterator = receivedValues.makeAsyncIterator()
@@ -59,7 +59,7 @@ import Testing
             updates,
             currentValue: { currentValue.value }
         ).map { "value=\($0)" }
-        let session = connection.makeSession(())
+        let session = connection.makeSession(.init())
         let (receivedValues, receivedValuesContinuation) = AsyncStream.makeStream(of: String.self)
         var receivedValuesIterator = receivedValues.makeAsyncIterator()
 
@@ -88,7 +88,7 @@ import Testing
         ).set {
             writtenValues.append($0)
         }
-        let session = connection.makeSession(())
+        let session = connection.makeSession(.init())
         let (receivedValues, receivedValuesContinuation) = AsyncStream.makeStream(of: Int.self)
         var receivedValuesIterator = receivedValues.makeAsyncIterator()
 
@@ -125,7 +125,7 @@ import Testing
             source.values,
             initialValue: 1
         )
-        let session = connection.makeSession(())
+        let session = connection.makeSession(.init())
 
         let firstActivation = session.activate { _ in }
         #expect(source.observationCount == 1)

@@ -26,7 +26,7 @@ extension View {
     /// subtree disappears.
     @MainActor public func scope<ParentScope, Definition: ValueDefinition>(
         _ keyPath: KeyPath<ParentScope, GenericConnection<Definition>>
-    ) -> some View where Definition.Configuration == Void {
+    ) -> some View where Definition.Configuration == EmptyConfiguration {
         modifier(ScopeModifier(scope: ScopedState(keyPath)))
     }
 

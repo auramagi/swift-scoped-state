@@ -15,7 +15,7 @@ import Testing
     func readOnlySubjectProvidesCurrentAndSubsequentValues() {
         let subject = CurrentValueSubject<Int, Never>(1)
         let connection: Connection<Int> = .subject(subject)
-        let session = connection.makeSession(())
+        let session = connection.makeSession(.init())
 
         #expect(session.setValue == nil)
 
@@ -40,7 +40,7 @@ import Testing
     func writableSubjectInfersSubjectSend() {
         let subject = CurrentValueSubject<Int, Never>(1)
         let connection: Connection<Int>.Writable = .subject(subject)
-        let session = connection.makeSession(())
+        let session = connection.makeSession(.init())
 
         let setValue = session.setValue
         #expect(setValue != nil)
@@ -66,7 +66,7 @@ import Testing
         let connection: Connection<Int>.Writable = .subject(subject).set {
             writtenValues.append($0)
         }
-        let session = connection.makeSession(())
+        let session = connection.makeSession(.init())
 
         let setValue = session.setValue
         #expect(setValue != nil)
@@ -92,7 +92,7 @@ import Testing
         let connection: Connection<String> = .subject(subject).map {
             "value=\($0)"
         }
-        let session = connection.makeSession(())
+        let session = connection.makeSession(.init())
 
         var receivedValues: [String] = []
         let activation = session.activate {
@@ -113,7 +113,7 @@ import Testing
         let connection: Connection<String>.Writable = .subject(subject)
             .map { "value=\($0)" }
             .set { writtenValues.append($0) }
-        let session = connection.makeSession(())
+        let session = connection.makeSession(.init())
 
         let setValue = session.setValue
         #expect(setValue != nil)
@@ -141,7 +141,7 @@ import Testing
             publisher.prepend(2),
             initialValue: 1
         )
-        let session = connection.makeSession(())
+        let session = connection.makeSession(.init())
 
         var deliveredValues: [Int] = []
         let activation = session.activate {
@@ -170,7 +170,7 @@ import Testing
         ).set {
             writtenValues.append($0)
         }
-        let session = connection.makeSession(())
+        let session = connection.makeSession(.init())
 
         let setValue = session.setValue
         #expect(setValue != nil)
@@ -198,7 +198,7 @@ import Testing
             publisher,
             currentValue: { current }
         )
-        let session = connection.makeSession(())
+        let session = connection.makeSession(.init())
 
         current = 2
 
@@ -230,7 +230,7 @@ import Testing
         ).set {
             writtenValues.append($0)
         }
-        let session = connection.makeSession(())
+        let session = connection.makeSession(.init())
 
         let setValue = session.setValue
         #expect(setValue != nil)

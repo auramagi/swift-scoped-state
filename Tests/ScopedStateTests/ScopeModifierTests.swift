@@ -30,6 +30,17 @@ import Testing
         #expect(source.updatedConfigurations.isEmpty)
         #expect(source.observationCount == 1)
 
+        host.rootView = ConfiguredRoot(
+            container: container,
+            configuration: 1,
+            probe: probe
+        )
+        render(host)
+
+        #expect(source.updatedConfigurations.isEmpty)
+        #expect(source.cancellationCount == 0)
+        #expect(source.observationCount == 1)
+
         let valueCountBeforeReconfiguration = probe.values.count
         host.rootView = ConfiguredRoot(
             container: container,

@@ -8,7 +8,7 @@
 extension GenericConnection {
     /// Transforms every value delivered by this connection while preserving
     /// its configuration and lifecycle behavior.
-    public func map<Configuration, Value, MappedValue>(
+    public func map<Configuration: Equatable, Value, MappedValue>(
         _ transform: @escaping (Value) -> MappedValue
     ) -> GenericConnection<ReadOnlyValueDefinition<Configuration, MappedValue>> where Definition == ReadOnlyValueDefinition<Configuration, Value> {
         .init(
@@ -35,13 +35,12 @@ extension GenericConnection {
                     },
                     reconfigure: session.reconfigure
                 )
-            },
-            configurationsEqual: configurationsEqual
+            }
         )
     }
 
     /// Adds a write operation to a read-only connection.
-    public func set<Configuration, Value>(
+    public func set<Configuration: Equatable, Value>(
         _ setValue: @escaping (Value) -> Void
     ) -> GenericConnection<ReadWriteValueDefinition<Configuration, Value>> where Definition == ReadOnlyValueDefinition<Configuration, Value> {
         .init(
@@ -54,13 +53,12 @@ extension GenericConnection {
                     reconfigure: session.reconfigure,
                     setValue: setValue
                 )
-            },
-            configurationsEqual: configurationsEqual
+            }
         )
     }
 }
 
-extension GenericConnection where Definition.Configuration == Void {
+extension GenericConnection where Definition.Configuration == EmptyConfiguration {
     /// Creates a read-only connection that always provides the same value.
     public static func constant<WrappedValue>(
         _ value: WrappedValue

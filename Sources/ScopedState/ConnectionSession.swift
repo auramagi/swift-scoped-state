@@ -8,7 +8,7 @@
 /// A configurable session connecting scoped state to an external
 /// implementation.
 /// Its closures retain any implementation object needed to keep the value alive.
-@MainActor public struct ConnectionSession<Configuration, Value> {
+@MainActor public struct ConnectionSession<Configuration: Equatable, Value> {
     /// A change emitted by an active session.
     public enum Update {
         /// Installs a value delivered by an external source.
@@ -53,7 +53,7 @@
     }
 }
 
-extension ConnectionSession where Configuration == Void {
+extension ConnectionSession where Configuration == EmptyConfiguration {
     public init(
         activate: @escaping (@escaping Yield) -> Activation,
         refresh: @escaping () -> Value? = { nil },
@@ -126,7 +126,7 @@ extension ConnectionSession {
     }
 }
 
-extension ConnectionSession where Configuration == Void {
+extension ConnectionSession where Configuration == EmptyConfiguration {
     public init<Observation>(
         initialValue: Value,
         observe: @escaping (@escaping @MainActor (Value) -> Void) -> Observation,

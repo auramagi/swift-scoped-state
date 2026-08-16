@@ -133,7 +133,7 @@ import SwiftUI
                     configuration: configuration
                 )
                 applyValue(activation.initialValue, notifyingObservers: false, valueBehavior: valueBehavior)
-            } else if let context, !context.connection.configurationsEqual(context.configuration, configuration) {
+            } else if let context, context.configuration != configuration {
                 context.sessionObservation?.cancel()
                 context.session.reconfigure(configuration)
                 let activation = context.session.activate(
@@ -184,14 +184,14 @@ import SwiftUI
 
     public init(
         _ keyPath: KeyPath<Scope, GenericConnection<Definition>>
-    ) where Definition: WritableValueDefinition, Definition.Configuration == Void, Projection == ReadWriteValueProjection<Definition.Value> {
-        self.init(keyPath, configuration: (), valueBehavior: .default)
+    ) where Definition: WritableValueDefinition, Definition.Configuration == EmptyConfiguration, Projection == ReadWriteValueProjection<Definition.Value> {
+        self.init(keyPath, configuration: .init(), valueBehavior: .default)
     }
 
     public init(
         _ keyPath: KeyPath<Scope, GenericConnection<Definition>>
-    ) where Definition: WritableValueDefinition, Definition.Configuration == Void, Projection == ReadWriteValueProjection<Definition.Value>, Definition.Value: Equatable {
-        self.init(keyPath, configuration: (), valueBehavior: .equatable)
+    ) where Definition: WritableValueDefinition, Definition.Configuration == EmptyConfiguration, Projection == ReadWriteValueProjection<Definition.Value>, Definition.Value: Equatable {
+        self.init(keyPath, configuration: .init(), valueBehavior: .equatable)
     }
 
     public init(
@@ -213,15 +213,15 @@ import SwiftUI
     public init(
         _ keyPath: KeyPath<Scope, GenericConnection<Definition>>,
         readOnly: Void = ()
-    ) where Definition.Configuration == Void, Projection == ReadOnlyValueProjection<Definition.Value> {
-        self.init(keyPath, configuration: (), valueBehavior: .default)
+    ) where Definition.Configuration == EmptyConfiguration, Projection == ReadOnlyValueProjection<Definition.Value> {
+        self.init(keyPath, configuration: .init(), valueBehavior: .default)
     }
 
     public init(
         _ keyPath: KeyPath<Scope, GenericConnection<Definition>>,
         readOnly: Void = ()
-    ) where Definition.Configuration == Void, Projection == ReadOnlyValueProjection<Definition.Value>, Definition.Value: Equatable {
-        self.init(keyPath, configuration: (), valueBehavior: .equatable)
+    ) where Definition.Configuration == EmptyConfiguration, Projection == ReadOnlyValueProjection<Definition.Value>, Definition.Value: Equatable {
+        self.init(keyPath, configuration: .init(), valueBehavior: .equatable)
     }
 
     public func update() {

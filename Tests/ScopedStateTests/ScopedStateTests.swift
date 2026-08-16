@@ -268,7 +268,7 @@ import Testing
     }
 
     @MainActor private struct ReadOnlyWritableValueReader: View {
-        @ScopedState<Scope, ReadWriteValueDefinition<Void, Int>, ReadOnlyValueProjection<Int>>(\Scope.writableValue) private var value
+        @ScopedState<Scope, ReadWriteValueDefinition<EmptyConfiguration, Int>, ReadOnlyValueProjection<Int>>(\Scope.writableValue) private var value
 
         let probe: ValueProbe<Int>
 
@@ -439,7 +439,7 @@ import Testing
     func writingProjectionBeforeUpdateFails() async {
         await #expect(processExitsWith: .failure) {
             await MainActor.run {
-                let state = ScopedState<ExitScope, ReadWriteValueDefinition<Void, Int>, ReadWriteValueProjection<Int>>(\.value)
+                let state = ScopedState<ExitScope, ReadWriteValueDefinition<EmptyConfiguration, Int>, ReadWriteValueProjection<Int>>(\.value)
                 state.projectedValue.wrappedValue = 1
             }
         }

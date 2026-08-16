@@ -16,8 +16,8 @@ import Testing
         let connection = Connection<Int>.constant(0).set {
             writtenValues.append($0)
         }
-        let firstSession = connection.makeSession(())
-        let secondSession = connection.makeSession(())
+        let firstSession = connection.makeSession(.init())
+        let secondSession = connection.makeSession(.init())
 
         firstSession.setValue?(1)
         secondSession.setValue?(2)
@@ -28,9 +28,8 @@ import Testing
     @Test
     func constantProvidesAnUnobservedInitialValue() {
         let connection: Connection<Int> = .constant(42)
-        let session = connection.makeSession(())
+        let session = connection.makeSession(.init())
 
-        #expect(connection.configurationsEqual((), ()))
         #expect(session.setValue == nil)
 
         #expect(session.activate { _ in }.initialValue == 42)
@@ -40,8 +39,8 @@ import Testing
     @Test
     func initialProvidesIndependentWritableLocalValues() throws {
         let connection: Connection<Int>.Writable = .initial(1)
-        let firstSession = connection.makeSession(())
-        let secondSession = connection.makeSession(())
+        let firstSession = connection.makeSession(.init())
+        let secondSession = connection.makeSession(.init())
         var firstValues: [Int] = []
         var secondValues: [Int] = []
 
@@ -75,7 +74,7 @@ import Testing
         let connection: Connection<String>.Writable = .constant(42)
             .map(String.init)
             .set { writtenValues.append($0) }
-        let session = connection.makeSession(())
+        let session = connection.makeSession(.init())
 
         let activation = session.activate { _ in }
         session.setValue?("replacement")
@@ -105,8 +104,8 @@ import Testing
             writtenValues.append($0)
         }
 
-        let readOnlySession = readOnly.makeSession(())
-        let writableSession = writable.makeSession(())
+        let readOnlySession = readOnly.makeSession(.init())
+        let writableSession = writable.makeSession(.init())
         #expect(readOnlySession.setValue == nil)
 
         guard let setValue = writableSession.setValue else {
@@ -157,7 +156,7 @@ import Testing
                 cancel: { _ in cancellationCount += 1 }
             )
         }
-        let session = connection.makeSession(())
+        let session = connection.makeSession(.init())
         var activation: Connection<Int>.Session.Activation? = session.activate { _ in }
 
         #expect(activation?.initialValue == 1)
@@ -180,7 +179,7 @@ import Testing
                 cancel: { _ in }
             )
         }
-        let session = connection.makeSession(())
+        let session = connection.makeSession(.init())
         var deliveredValues: [Int] = []
 
         let activation = session.activate {
@@ -194,30 +193,26 @@ import Testing
     }
 
     @Test
-    func mapTransformsLifecycleValuesAndPreservesConfigurationSemantics() {
+    func mapTransformsLifecycleValuesAndPreservesConfiguration() {
         typealias SourceConnection = Connection<Int>.Configuration<String>
 
         var cancellationCount = 0
-        let source = SourceConnection(
-            makeSession: { configuration in
-                SourceConnection.Session { _ in
-                    (
-                        initialValue: configuration.count,
-                        observation: CancellationToken {
-                            cancellationCount += 1
-                        }
-                    )
-                } refresh: {
-                    2
-                } reconfigure: { _ in
-                }
-            },
-            configurationsEqual: { $0.lowercased() == $1.lowercased() }
-        )
+        let source = SourceConnection { configuration in
+            SourceConnection.Session { _ in
+                (
+                    initialValue: configuration.count,
+                    observation: CancellationToken {
+                        cancellationCount += 1
+                    }
+                )
+            } refresh: {
+                2
+            } reconfigure: { _ in
+            }
+        }
         let mapped = source.map { "value=\($0)" }
         let session = mapped.makeSession("initial")
 
-        #expect(mapped.configurationsEqual("VALUE", "value"))
         let initialActivation = session.activate { _ in }
         #expect(initialActivation.initialValue == "value=7")
         #expect(session.refresh() == "value=2")

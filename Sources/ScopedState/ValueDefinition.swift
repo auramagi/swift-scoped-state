@@ -6,13 +6,15 @@
 //
 
 public protocol ValueDefinition<Configuration, Value>: SendableMetatype {
-    associatedtype Configuration
+    associatedtype Configuration: Equatable
 
     associatedtype Value
 }
 
 public protocol WritableValueDefinition<Configuration, Value>: ValueDefinition {}
 
-public struct ReadOnlyValueDefinition<Configuration, Value>: ValueDefinition {}
+public struct ReadOnlyValueDefinition<Configuration: Equatable, Value>: ValueDefinition {}
 
-public struct ReadWriteValueDefinition<Configuration, Value>: WritableValueDefinition {}
+public struct ReadWriteValueDefinition<Configuration: Equatable, Value>: WritableValueDefinition {}
+
+public struct EmptyConfiguration: Equatable {}

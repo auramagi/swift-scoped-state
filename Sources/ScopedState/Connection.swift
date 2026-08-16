@@ -5,10 +5,10 @@
 //  Created by Mikhail Apurin on 2026-08-08.
 //
 
-public typealias Connection<Value> = GenericConnection<ReadOnlyValueDefinition<Void, Value>>
+public typealias Connection<Value> = GenericConnection<ReadOnlyValueDefinition<EmptyConfiguration, Value>>
 
 extension Connection {
-    public typealias Configuration<NewConfiguration> = GenericConnection<ReadOnlyValueDefinition<NewConfiguration, Definition.Value>>
+    public typealias Configuration<NewConfiguration: Equatable> = GenericConnection<ReadOnlyValueDefinition<NewConfiguration, Definition.Value>>
 
     public typealias Writable = GenericConnection<ReadWriteValueDefinition<Definition.Configuration, Definition.Value>>
 }
@@ -19,35 +19,17 @@ extension Connection {
 
     let makeSession: (Definition.Configuration) -> Session
 
-    let configurationsEqual: (Definition.Configuration, Definition.Configuration) -> Bool
-
-    public init(
-        makeSession: @escaping (Definition.Configuration) -> Session,
-        configurationsEqual: @escaping (Definition.Configuration, Definition.Configuration) -> Bool
-    ) {
-        self.makeSession = makeSession
-        self.configurationsEqual = configurationsEqual
-    }
-}
-
-extension GenericConnection where Definition.Configuration: Equatable {
     public init(
         makeSession: @escaping (Definition.Configuration) -> Session
     ) {
-        self.init(
-            makeSession: makeSession,
-            configurationsEqual: { $0 == $1 }
-        )
+        self.makeSession = makeSession
     }
 }
 
-extension GenericConnection where Definition.Configuration == Void {
+extension GenericConnection where Definition.Configuration == EmptyConfiguration {
     public init(
         makeSession: @escaping () -> Session
     ) {
-        self.init(
-            makeSession: { _ in makeSession() },
-            configurationsEqual: { _, _ in true }
-        )
+        self.init(makeSession: { _ in makeSession() })
     }
 }

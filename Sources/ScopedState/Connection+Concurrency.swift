@@ -20,7 +20,7 @@
 }
 
 @available(macOS 15.0, iOS 18.0, watchOS 11.0, tvOS 18.0, visionOS 2.0, *)
-extension GenericConnection where Definition.Configuration == Void {
+extension GenericConnection where Definition.Configuration == EmptyConfiguration {
     /// Creates a read-only connection that starts with an initial value and
     /// then receives values from an asynchronous sequence.
     /// The sequence expression is evaluated whenever observation starts.
