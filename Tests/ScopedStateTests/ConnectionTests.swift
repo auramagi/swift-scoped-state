@@ -93,4 +93,26 @@ import Testing
 
         #expect(cancellationCount == 2)
     }
+
+    @Test
+    func writableMapTransformsDeliveredAndWrittenValues() throws {
+        let source: WritableConnection<Int> = .initial(1)
+        let connection: WritableConnection<String> = source.map(
+            get: String.init,
+            set: { Int($0) ?? 0 }
+        )
+        let session = connection.makeSession(.init())
+        var deliveredValues: [String] = []
+
+        let activation = session.activate {
+            if case let .value(value) = $0 {
+                deliveredValues.append(value)
+            }
+        }
+        let setValue = try #require(session.setValue)
+        setValue("2")
+
+        #expect(activation.initialValue == "1")
+        #expect(deliveredValues == ["2"])
+    }
 }
