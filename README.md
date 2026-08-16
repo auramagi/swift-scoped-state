@@ -27,13 +27,13 @@ ScopedState allows SwiftUI views to declare state connected to external sources 
 
 ## Overview
 
-ScopedState separates the state a view declares from the implementation that supplies it. Its main pieces are:
+ScopedState separates the interface a view consumes from the implementation that supplies it. Views identify state with static key paths instead of receiving a concrete container, starting subscriptions, or passing context through each initializer.
 
-- **`@ScopedState`** — Selects and retains connected state for a view.
-- **Scopes** — Declare the state and operations available to a view hierarchy.
-- **Connections** — Describe how values are initialized, updated, and optionally written back.
-- **Connection sources** — Adapt external values and update mechanisms into connections.
-- **Containers** — Assemble connections into scopes and provide them to a view hierarchy.
+- **`@ScopedState`** — Resolves a connection and exposes its current value to a view.
+- **Scopes** — Define the state and operations available to a view hierarchy.
+- **Connections** — Define how values are initialized, updated, and optionally written back.
+- **Connection sources** — Adapt Observation, asynchronous sequences, Combine, or custom implementations.
+- **Containers** — Assemble connections into scopes and provide them at the appropriate point in the hierarchy.
 
 The complete path from scope declaration to environment injection stays compact.
 
@@ -107,9 +107,11 @@ Then add the `ScopedState` product to the dependencies of your target.
 
 ## Basic Usage
 
+The following walkthrough is abridged from the included Todo project. It starts with the interface seen by views and introduces the container only at the point where the root scope enters the hierarchy.
+
 ### Root Scope
 
-`AppScope` declares the state and operations available to the todo list.
+`AppScope` is the interface available to the todo list. Its properties are connection definitions, not the values themselves: `addTodo` connects to an action, while `todos` connects to a read-only list of IDs.
 
 ```swift
 @MainActor struct AppScope {
@@ -119,7 +121,7 @@ Then add the `ScopedState` product to the dependencies of your target.
 }
 ```
 
-`TodoListView` selects the connections it needs using static key paths.
+`TodoListView` selects those definitions using static key paths. The wrapped properties expose the values delivered by the connections, so the body works with an ordinary closure and an array.
 
 ```swift
 struct TodoListView: View {
@@ -140,7 +142,7 @@ struct TodoListView: View {
 }
 ```
 
-`ContentView` owns the container and provides `AppScope` around the todo list.
+`ContentView` owns a stable container and provides its `AppScope` around the todo list. The consuming views depend on the scope type, not on `AppContainer` itself.
 
 ```swift
 struct ContentView: View {
@@ -155,7 +157,7 @@ struct ContentView: View {
 
 ### Child Scopes
 
-`AppScope` also provides a child scope configured for one todo.
+`AppScope` also provides a child scope for one todo. Its `ConfiguredConnection` accepts a `Todo.ID`, which identifies the todo represented by that scope.
 
 ```swift
 @MainActor struct AppScope {
@@ -175,6 +177,8 @@ struct ContentView: View {
 }
 ```
 
+Because `TodoScope` represents one particular todo, the ID is already implied. It can expose `title`, `isCompleted`, and `delete` without making every operation accept the ID again.
+
 `TodoListView` injects that scope around each row, using the todo ID as its configuration.
 
 ```swift
@@ -184,7 +188,7 @@ ForEach(todos, id: \.self) { id in
 }
 ```
 
-`TodoRow` declares its state and operations in terms of one todo. It doesn't receive or pass the ID itself.
+Inside that subtree, `TodoRow` declares state and operations in terms of one todo without receiving or passing the ID itself.
 
 ```swift
 struct TodoRow: View {
@@ -205,9 +209,9 @@ struct TodoRow: View {
 }
 ```
 
-The external implementation uses `Todo.ID` to determine which todo the child scope represents. `TodoRow` sees only the resulting state and operations.
+The external implementation uses `Todo.ID` to resolve the child scope. `TodoRow` sees only state and operations already scoped to that todo.
 
-The complete project is available in [Examples/Todo](Examples/Todo).
+The complete sample project, including the Observation-backed container, is available in [Examples/Todo](Examples/Todo).
 
 ## How It Works
 
@@ -215,23 +219,25 @@ The complete project is available in [Examples/Todo](Examples/Todo).
 
 `@State` declares a value that belongs to a SwiftUI view hierarchy. `@Environment` accesses a value created elsewhere and provided through context. APIs such as `@AppStorage`, `@SceneStorage`, Core Data's `@FetchRequest`, and SwiftData's `@Query` sit somewhere between the two: a view declares the state it needs, while a key or query connects that state to an external source.
 
-`@ScopedState` follows that model. A view identifies state through a static key path. A container puts the corresponding scope into the SwiftUI environment. The property wrapper resolves the connection, retains its current value for the lifetime of the view's state, and receives later updates from the external source. Writable connections also send changes back to that source.
+`@ScopedState` follows that model. A view identifies state through a static key path, and a container puts the corresponding scope into the SwiftUI environment. The property wrapper resolves the connection, retains its current value for the lifetime of the view's state, and receives later updates from the external source. Writable connections also send changes back to that source.
 
-`@ScopedState` is a `DynamicProperty`. It resolves its scope from the SwiftUI environment and uses SwiftUI state to retain the active connection and current value across view updates.
+As a `DynamicProperty`, `@ScopedState` participates in SwiftUI's update cycle. It uses SwiftUI state to keep the active connection and current value across view updates, rather than asking the view to initialize and retain that machinery itself.
 
-A connection follows the lifetime of the SwiftUI state that declares it. This is not the same as view appearance: SwiftUI may retain state for a view that is temporarily off-screen, such as a view in a navigation hierarchy.
+The connection follows the lifetime of the SwiftUI state that declares it. This is not the same as view appearance: SwiftUI may retain state for a view that is temporarily off-screen, such as a view in a navigation hierarchy.
 
 ### Scopes
 
 A scope groups state and operations that share context. `TodoScope` doesn't merely collect todo-related APIs; it represents one particular todo. That context lets it expose `title`, `isCompleted`, and `delete` instead of APIs that repeatedly accept a `Todo.ID`.
 
-Scopes are ordinary types containing statically declared connections. They form the interface between views and containers without exposing a concrete container type to the consuming view.
+Scopes are ordinary types containing statically declared connections. They require no protocol or registration, and they form the interface between views and containers without exposing a concrete container type to the consuming view. A root scope can describe a broad view hierarchy, while a child scope represents more specific context within it.
 
-Scope types and key paths make available connections explicit and checked by the compiler. Resolution does not depend on string keys, runtime casts, or a service lookup.
+Scope types and key paths make the available connections explicit and checked by the compiler. Resolution does not depend on string keys, runtime casts, or a service lookup.
 
 ### Connections
 
-A connection describes how scoped state receives its initial value and later updates. It may also describe how changes are written back to the external source.
+A connection describes how scoped state receives its initial value and later updates. It may also describe how changes are written back to the external source. The definition stored in a scope is not itself an active subscription; `@ScopedState` uses it to establish a connection for that property and SwiftUI state lifetime.
+
+A configured connection is established with an `Equatable` configuration. If that configuration changes while the SwiftUI state remains alive, the connection updates to represent the new context.
 
 | Type | Capability |
 | --- | --- |
@@ -240,7 +246,9 @@ A connection describes how scoped state receives its initial value and later upd
 | `ConfiguredConnection<Value, Configuration>` | Read-only connection with configuration |
 | `WritableConfiguredConnection<Value, Configuration>` | Writable connection with configuration |
 
-Writable connections are a superset of read-only connections. A scope property declared as `Connection<Value>` can receive either kind; a property declared as `WritableConnection<Value>` requires a writable connection.
+Writable connections are a superset of read-only connections. A scope property declared as `Connection<Value>` can receive either kind; a property declared as `WritableConnection<Value>` requires a writable connection. The type declared by the scope determines which write access is exposed to the consuming view.
+
+For a writable scoped property, the projected value is a `Binding<Value>`. It can be passed directly to SwiftUI controls or used to replace the root through `$property.wrappedValue`. A read-only scoped property does not expose that root binding.
 
 #### Read-Only Objects and Bindings
 
@@ -264,15 +272,15 @@ struct EditorView: View {
 }
 ```
 
-The read-only projection exposes bindings to writable object properties such as `title`, but it does not expose a binding that replaces `model` itself. `WritableConnection<EditorModel>` would expose both.
+The read-only projection exposes bindings to writable object properties such as `title`, but it does not expose a binding that replaces `model` itself. With `WritableConnection<EditorModel>`, the projection is a `Binding<EditorModel>` and supports both.
 
 ### Connection Sources
 
-Connection definitions can adapt several kinds of external sources.
+Connection definitions can adapt several kinds of external sources. Each built-in factory combines a value available when the connection starts with a way to receive later updates; writable factories also provide a way to send values back.
 
 #### Observation
 
-An observation expression tracks every `@Observable` property it reads. Key-path overloads connect to one property; a writable key path produces a writable connection, which can also satisfy a read-only declaration.
+An observation expression tracks every `@Observable` property it reads and is reevaluated when one of them changes. Use the closure form for a value derived from several properties, or a key-path overload to connect to one property. A writable key path produces a writable connection, which can also satisfy a read-only declaration.
 
 ```swift
 let summary: Connection<String> = .observation {
@@ -286,7 +294,7 @@ let title: Connection<String> = .observation(todo, \.title)
 
 #### Swift Concurrency
 
-An asynchronous sequence can provide later updates after an initial or synchronously fetched value. Concurrency connections require iOS 18, macOS 15, tvOS 18, watchOS 11, or visionOS 2.
+An asynchronous sequence can provide later updates after an initial or synchronously fetched value. The sequence expression is evaluated whenever observation starts, and its task is cancelled when that observation ends. Concurrency connections require iOS 18, macOS 15, tvOS 18, watchOS 11, or visionOS 2.
 
 ```swift
 let message: Connection<Message> = .async(
@@ -297,7 +305,7 @@ let message: Connection<Message> = .async(
 
 #### Combine
 
-A current-value subject provides both observation and writing. Other publishers require an initial value or synchronous current-value getter.
+A `CurrentValueSubject` provides a current value, later updates, and a write operation, so `.subject` creates a writable connection. Other publishers create read-only connections and require an initial value or synchronous current-value getter. Combine connection sources must have `Failure == Never`.
 
 ```swift
 let status: WritableConnection<Status> = .subject(statusSubject)
@@ -310,7 +318,7 @@ let progress: Connection<Double> = .publisher(
 
 #### Constants and Local State
 
-Use a constant for immutable values and actions. An initial connection instead gives every connected property independent writable state.
+Use `.constant` for immutable values and actions. An `.initial` connection instead gives every connected property independent writable state that begins with the supplied value.
 
 ```swift
 let buildNumber: Connection<Int> = .constant(42)
@@ -318,9 +326,11 @@ let buildNumber: Connection<Int> = .constant(42)
 let selection: WritableConnection<Todo.ID?> = .initial(nil)
 ```
 
+The state created by `.initial` is not shared between connected properties and resets when a connection is recreated.
+
 #### Custom
 
-For sources without a built-in adapter, `.readOnly` and `.readWrite` construct a connection from a custom `ConnectionSession`.
+For sources without a built-in adapter, `.readOnly` and `.readWrite` construct a connection from a custom `ConnectionSession`. A session provides the starting value, later updates, optional writes, and any cancellation needed by its observation mechanism.
 
 ```swift
 let count: WritableConnection<Int> = .readWrite {
@@ -333,6 +343,8 @@ let count: WritableConnection<Int> = .readWrite {
 }
 ```
 
+Activation returns an initial value and an optional `CancellationToken`. An active session can then yield `.value(newValue)` for a pushed update, or `.invalidate` when the value should be refreshed during a later SwiftUI update.
+
 Factories are exposed through the `Connections` namespace. When the expected connection type is known, Swift also allows the shorter leading-dot syntax used throughout the examples.
 
 ```swift
@@ -343,15 +355,19 @@ let declared: Connection<Int> = .constant(42)
 
 ### Containers
 
-A container is a reference type that provides a scope. It may own external storage, assemble connections from other dependencies, create state for a particular scope, or provide a self-contained mock. ScopedState does not prescribe its internal architecture.
+A container is a reference type that provides a scope. It may own external storage, assemble connections from other dependencies, create state for a particular scope, or provide a self-contained mock. ScopedState does not require a container protocol or prescribe its internal architecture.
 
-Containers provide connection definitions. The corresponding `@ScopedState` property creates and retains an active connection as part of SwiftUI's state lifecycle. A concrete Observation-backed implementation is available in the [Todo example](Examples/Todo/Todo/AppContainer.swift).
+The `.container(_:scope:)` modifier takes a key path to the provided scope. Only the scope type enters the environment; the concrete container type remains at the injection site. Container identity and the key path together identify that provision, so a computed scope property is evaluated only when either one changes.
+
+Containers provide connection definitions. The corresponding `@ScopedState` properties establish and retain the active connections as part of SwiftUI's state lifecycle.
+
+A configured child-scope connection can create a narrower container and retain it for that subtree. The [Todo example](Examples/Todo/Todo/AppContainer.swift) uses this pattern: `AppContainer` provides the root scope, while `todoScope` creates a `TodoContainer` for the selected ID.
 
 ## Advanced Usage and Techniques
 
 ### Adding Write Access
 
-The `.set` modifier adds write behavior to a connection whose source is otherwise read-only.
+The `.set` modifier adds or replaces write behavior without changing how a connection receives values. This is useful when the read source and write operation are separate—for example, a publisher paired with a command on a store.
 
 ```swift
 let progress: WritableConnection<Double> = .publisher(
@@ -363,7 +379,7 @@ let progress: WritableConnection<Double> = .publisher(
 
 ### `ObservableObject` Support
 
-When the connected value conforms to `ObservableObject`, `@ScopedState` automatically observes its `objectWillChange` publisher in addition to updates delivered by the connection.
+An `ObservableObject` can publish internal changes without the connection delivering a replacement object. When the connected value conforms to `ObservableObject`, `@ScopedState` observes its `objectWillChange` publisher in addition to updates delivered by the connection.
 
 ```swift
 final class CounterModel: ObservableObject {
@@ -383,11 +399,11 @@ struct CounterView: View {
 }
 ```
 
-No special connection constructor is required. If the connection later delivers a different object, `@ScopedState` transfers observation to the new instance.
+No special connection constructor is required. Changes published by `model` update `CounterView`; if the connection later delivers a different object, `@ScopedState` transfers observation to the new instance.
 
 ### Previews with `PreviewTrait`
 
-A `PreviewModifier` is one way to provide a scope to several previews. Its shared context can create and retain the preview container, while a custom trait keeps each preview declaration short.
+A `PreviewModifier` is one way to provide the same scope setup to several previews. Its shared context can create and retain the preview container, while a custom `PreviewTrait` keeps each preview declaration short.
 
 ```swift
 struct SampleAppScopePreviewModifier: PreviewModifier {
@@ -412,7 +428,7 @@ extension PreviewTrait where T == Preview.ViewTraits {
 }
 ```
 
-The Todo project also defines an empty-scope trait in [AppContainer.swift](Examples/Todo/Todo/AppContainer.swift).
+This is a convenience technique rather than a requirement of the library. The Todo project also defines an empty-scope trait in [AppContainer.swift](Examples/Todo/Todo/AppContainer.swift), allowing the same view to be previewed against distinct container state.
 
 ## License
 
