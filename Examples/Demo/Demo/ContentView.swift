@@ -270,7 +270,7 @@ struct ProductDetailSnapshot: Equatable {
 }
 
 @MainActor struct AppScope {
-    let productDetail: Connection<ProductScope>.Configuration<ProductDetailConfiguration>
+    let productDetail: ConfiguredConnection<ProductScope, ProductDetailConfiguration>
 }
 
 @MainActor struct AppDiagnosticsScope {
@@ -286,7 +286,7 @@ struct ProductDetailSnapshot: Equatable {
 
     var appScope: AppScope {
         AppScope(
-            productDetail: .init { configuration in
+            productDetail: .readOnly { configuration in
                 let container = ProductDetailContainer(appContainer: self, configuration: configuration)
                 let scope = container.scope
                 return .init(
@@ -377,19 +377,19 @@ struct ProductDetailSnapshot: Equatable {
 }
 
 @MainActor struct ProductScope {
-    let orderState: Connection<OrderState>.Writable
+    let orderState: WritableConnection<OrderState>
 
     let snapshot: Connection<ProductDetailSnapshot>
 
     let isAvailable: Connection<Bool>
 
-    let isFavorite: Connection<Bool>.Writable
+    let isFavorite: WritableConnection<Bool>
 
     let options: Connection<ProductOptions>
 
     let optionControls: Connection<ProductOptionControls>
 
-    let replaceableOptions: Connection<ProductOptions>.Writable
+    let replaceableOptions: WritableConnection<ProductOptions>
 }
 
 @MainActor final class ProductDetailContainer {

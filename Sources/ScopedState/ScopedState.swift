@@ -7,23 +7,35 @@
 
 import SwiftUI
 
-@MainActor @propertyWrapper public struct ScopedState<Scope, Definition: ValueDefinition, Projection: ValueProjection>: @MainActor DynamicProperty where Definition.Value == Projection.Value {
-    private typealias Connection = GenericConnection<Definition>
+@MainActor @propertyWrapper public struct ScopedState<Scope, Configuration: Equatable, Value, Projection: ValueProjection>: @MainActor DynamicProperty where Value == Projection.Value {
+    typealias Session = ConnectionSession<Configuration, Value>
+
+    typealias Source = Coordinator.Source
 
     @MainActor struct ValueBehavior {
-        let areEquivalent: (_ lhs: Definition.Value, _ rhs: Definition.Value) -> Bool
+        let areEquivalent: (_ lhs: Value, _ rhs: Value) -> Bool
 
-        let makeObservation: ((_ value: Definition.Value, _ invalidate: @escaping @MainActor () -> Void) -> CancellationToken)?
+        let makeObservation: ((_ value: Value, _ invalidate: @escaping @MainActor () -> Void) -> CancellationToken)?
     }
 
-    @MainActor private final class Coordinator {
+    @MainActor final class Coordinator {
+        nonisolated init(storage: ScopedStateStorage<Value>) {
+            self.storage = storage
+        }
+
+        @MainActor struct Source {
+            let keyPath: AnyKeyPath
+
+            let makeSession: (Scope, Configuration) -> Session
+        }
+
         @MainActor struct Context {
             struct ConnectionIdentity: Equatable {
                 let scopeStorage: ScopedStateStorage<Scope>
 
                 let generation: UInt
 
-                let keyPath: KeyPath<Scope, Connection>
+                let keyPath: AnyKeyPath
 
                 static func == (lhs: ConnectionIdentity, rhs: ConnectionIdentity) -> Bool {
                     lhs.scopeStorage === rhs.scopeStorage
@@ -34,24 +46,22 @@ import SwiftUI
 
             let identity: ConnectionIdentity
 
-            let connection: Connection
-
             let valueBehavior: ValueBehavior
 
-            let session: Connection.Session
+            let session: Session
 
             var sessionObservation: CancellationToken?
 
             var valueObservation: CancellationToken?
 
-            var configuration: Definition.Configuration
+            var configuration: Configuration
         }
 
-        let storage = ScopedStateStorage<Definition.Value>()
+        let storage: ScopedStateStorage<Value>
 
         private var context: Context?
 
-        var value: Definition.Value {
+        var value: Value {
             get {
                 storage.requiredValue
             }
@@ -68,7 +78,7 @@ import SwiftUI
             }
         }
 
-        private func makeYield(valueBehavior: ValueBehavior) -> Connection.Session.Yield {
+        private func makeYield(valueBehavior: ValueBehavior) -> Session.Yield {
             { [weak self] update in
                 guard let self else { return }
 
@@ -83,7 +93,7 @@ import SwiftUI
         }
 
         private func applyValue(
-            _ value: Definition.Value,
+            _ value: Value,
             notifyingObservers: Bool,
             valueBehavior: ValueBehavior
         ) {
@@ -105,19 +115,18 @@ import SwiftUI
 
         func update(
             scopeStorage: ScopedStateStorage<Scope>,
-            keyPath: KeyPath<Scope, Connection>,
-            configuration: Definition.Configuration,
+            source: Source,
+            configuration: Configuration,
             valueBehavior: ValueBehavior
         ) {
             let identity = Context.ConnectionIdentity(
                 scopeStorage: scopeStorage,
                 generation: scopeStorage.generation,
-                keyPath: keyPath
+                keyPath: source.keyPath
             )
 
             if context?.identity != identity {
-                let connection = identity.scopeStorage.requiredValue[keyPath: identity.keyPath]
-                let session = connection.makeSession(configuration)
+                let session = source.makeSession(scopeStorage.requiredValue, configuration)
 
                 context?.sessionObservation?.cancel()
                 let activation = session.activate(
@@ -125,7 +134,6 @@ import SwiftUI
                 )
                 context = Context(
                     identity: identity,
-                    connection: connection,
                     valueBehavior: valueBehavior,
                     session: session,
                     sessionObservation: activation.observation,
@@ -148,96 +156,119 @@ import SwiftUI
         }
     }
 
-    @State private var coordinator = Coordinator()
+    @State private var coordinator = Coordinator(storage: ScopedStateStorage())
 
     @Environment(ScopedStateStorage<Scope>.self) private var scope
 
-    private let keyPath: KeyPath<Scope, Connection>
+    private let source: Source
 
-    private let configuration: Definition.Configuration
+    private let configuration: Configuration
 
     private let valueBehavior: ValueBehavior
 
     init(
-        _ keyPath: KeyPath<Scope, GenericConnection<Definition>>,
-        configuration: Definition.Configuration,
-        valueBehavior: ValueBehavior
+        keyPath: AnyKeyPath,
+        configuration: Configuration,
+        valueBehavior: ValueBehavior,
+        makeSession: @escaping (Scope, Configuration) -> Session
     ) {
-        self.keyPath = keyPath
+        self.source = Source(keyPath: keyPath, makeSession: makeSession)
         self.configuration = configuration
         self.valueBehavior = valueBehavior
     }
 
+    init(
+        _ keyPath: KeyPath<Scope, WritableConfiguredConnection<Value, Configuration>>,
+        configuration: Configuration,
+        valueBehavior: ValueBehavior
+    ) {
+        self.init(
+            keyPath: keyPath,
+            configuration: configuration,
+            valueBehavior: valueBehavior,
+            makeSession: { $0[keyPath: keyPath].makeSession($1) }
+        )
+    }
+
+    init(
+        _ keyPath: KeyPath<Scope, ConfiguredConnection<Value, Configuration>>,
+        configuration: Configuration,
+        valueBehavior: ValueBehavior
+    ) {
+        self.init(
+            keyPath: keyPath,
+            configuration: configuration,
+            valueBehavior: valueBehavior,
+            makeSession: { $0[keyPath: keyPath].makeSession($1) }
+        )
+    }
+
     public init(
-        _ keyPath: KeyPath<Scope, GenericConnection<Definition>>,
-        configuration: Definition.Configuration
-    ) where Definition: WritableValueDefinition, Projection == ReadWriteValueProjection<Definition.Value> {
+        _ keyPath: KeyPath<Scope, WritableConfiguredConnection<Value, Configuration>>,
+        configuration: Configuration
+    ) where Projection == ReadWriteValueProjection<Value> {
         self.init(keyPath, configuration: configuration, valueBehavior: .default)
     }
 
     public init(
-        _ keyPath: KeyPath<Scope, GenericConnection<Definition>>,
-        configuration: Definition.Configuration
-    ) where Definition: WritableValueDefinition, Projection == ReadWriteValueProjection<Definition.Value>, Definition.Value: Equatable {
+        _ keyPath: KeyPath<Scope, WritableConfiguredConnection<Value, Configuration>>,
+        configuration: Configuration
+    ) where Projection == ReadWriteValueProjection<Value>, Value: Equatable {
         self.init(keyPath, configuration: configuration, valueBehavior: .equatable)
     }
 
     public init(
-        _ keyPath: KeyPath<Scope, GenericConnection<Definition>>
-    ) where Definition: WritableValueDefinition, Definition.Configuration == EmptyConfiguration, Projection == ReadWriteValueProjection<Definition.Value> {
-        self.init(keyPath, configuration: .init(), valueBehavior: .default)
+        _ keyPath: KeyPath<Scope, WritableConnection<Value>>
+    ) where Configuration == EmptyConfiguration, Projection == ReadWriteValueProjection<Value> {
+        self.init(keyPath, configuration: .init())
     }
 
     public init(
-        _ keyPath: KeyPath<Scope, GenericConnection<Definition>>
-    ) where Definition: WritableValueDefinition, Definition.Configuration == EmptyConfiguration, Projection == ReadWriteValueProjection<Definition.Value>, Definition.Value: Equatable {
-        self.init(keyPath, configuration: .init(), valueBehavior: .equatable)
+        _ keyPath: KeyPath<Scope, WritableConnection<Value>>
+    ) where Configuration == EmptyConfiguration, Projection == ReadWriteValueProjection<Value>, Value: Equatable {
+        self.init(keyPath, configuration: .init())
     }
 
     public init(
-        _ keyPath: KeyPath<Scope, GenericConnection<Definition>>,
-        configuration: Definition.Configuration,
-        readOnly: Void = ()
-    ) where Projection == ReadOnlyValueProjection<Definition.Value> {
+        _ keyPath: KeyPath<Scope, ConfiguredConnection<Value, Configuration>>,
+        configuration: Configuration
+    ) where Projection == ReadOnlyValueProjection<Value> {
         self.init(keyPath, configuration: configuration, valueBehavior: .default)
     }
 
     public init(
-        _ keyPath: KeyPath<Scope, GenericConnection<Definition>>,
-        configuration: Definition.Configuration,
-        readOnly: Void = ()
-    ) where Projection == ReadOnlyValueProjection<Definition.Value>, Definition.Value: Equatable {
+        _ keyPath: KeyPath<Scope, ConfiguredConnection<Value, Configuration>>,
+        configuration: Configuration
+    ) where Projection == ReadOnlyValueProjection<Value>, Value: Equatable {
         self.init(keyPath, configuration: configuration, valueBehavior: .equatable)
     }
 
     public init(
-        _ keyPath: KeyPath<Scope, GenericConnection<Definition>>,
-        readOnly: Void = ()
-    ) where Definition.Configuration == EmptyConfiguration, Projection == ReadOnlyValueProjection<Definition.Value> {
-        self.init(keyPath, configuration: .init(), valueBehavior: .default)
+        _ keyPath: KeyPath<Scope, Connection<Value>>
+    ) where Configuration == EmptyConfiguration, Projection == ReadOnlyValueProjection<Value> {
+        self.init(keyPath, configuration: .init())
     }
 
     public init(
-        _ keyPath: KeyPath<Scope, GenericConnection<Definition>>,
-        readOnly: Void = ()
-    ) where Definition.Configuration == EmptyConfiguration, Projection == ReadOnlyValueProjection<Definition.Value>, Definition.Value: Equatable {
-        self.init(keyPath, configuration: .init(), valueBehavior: .equatable)
+        _ keyPath: KeyPath<Scope, Connection<Value>>
+    ) where Configuration == EmptyConfiguration, Projection == ReadOnlyValueProjection<Value>, Value: Equatable {
+        self.init(keyPath, configuration: .init())
     }
 
     public func update() {
         coordinator.update(
             scopeStorage: scope,
-            keyPath: keyPath,
+            source: source,
             configuration: configuration,
             valueBehavior: valueBehavior
         )
     }
 
-    var storage: ScopedStateStorage<Definition.Value> {
+    var storage: ScopedStateStorage<Value> {
         coordinator.storage
     }
 
-    public var wrappedValue: Definition.Value {
+    public var wrappedValue: Value {
         coordinator.storage.requiredValue
     }
 
@@ -257,19 +288,11 @@ private extension ScopedState.ValueBehavior {
     }
 }
 
-private extension ScopedState.ValueBehavior where Definition.Value: Equatable {
+private extension ScopedState.ValueBehavior where Value: Equatable {
     static var equatable: Self {
         Self(
             areEquivalent: { $0 == $1 },
             makeObservation: nil
         )
-    }
-}
-
-@MainActor @dynamicMemberLookup public struct ScopedStateProjection<Base> {
-    let base: Binding<Base>
-
-    public subscript<Value>(dynamicMember keyPath: ReferenceWritableKeyPath<Base, Value>) -> Binding<Value> {
-        base[dynamicMember: keyPath]
     }
 }

@@ -1,5 +1,5 @@
 //
-//  Connection+Observation.swift
+//  Connections+Observation.swift
 //  ScopedState
 //
 //  Created by Mikhail Apurin on 2026-08-10.
@@ -51,14 +51,14 @@ import Observation
     }
 }
 
-extension GenericConnection where Definition.Configuration == EmptyConfiguration {
+extension ConnectionDefinition where Self == Connections {
     /// Creates a read-only connection to values tracked by Observation.
     ///
     /// Changes to tracked properties must be made on the main actor.
     public static func observation<WrappedValue>(
         _ currentValue: @escaping () -> WrappedValue
-    ) -> Connection<WrappedValue> {
-        Connection<WrappedValue> {
+    ) -> some ConnectionDefinition<EmptyConfiguration, WrappedValue> {
+        ReadOnlyConnectionDefinition { _ in
             var activeObservation: ObservationActivation<WrappedValue>?
 
             return .init { yield in
@@ -83,7 +83,7 @@ extension GenericConnection where Definition.Configuration == EmptyConfiguration
     public static func observation<Root: Observable, WrappedValue>(
         _ root: Root,
         _ keyPath: KeyPath<Root, WrappedValue>
-    ) -> Connection<WrappedValue> {
+    ) -> some ConnectionDefinition<EmptyConfiguration, WrappedValue> {
         .observation { root[keyPath: keyPath] }
     }
 
@@ -91,8 +91,8 @@ extension GenericConnection where Definition.Configuration == EmptyConfiguration
     public static func observation<Root: Observable, WrappedValue>(
         _ root: Root,
         _ keyPath: ReferenceWritableKeyPath<Root, WrappedValue>
-    ) -> Connection<WrappedValue>.Writable {
-        let connection: Connection<WrappedValue> = .observation(root, keyPath)
+    ) -> some WritableConnectionDefinition<EmptyConfiguration, WrappedValue> {
+        let connection = Connections.observation(root, keyPath as KeyPath<Root, WrappedValue>)
         return connection.set { root[keyPath: keyPath] = $0 }
     }
 }

@@ -1,5 +1,5 @@
 //
-//  ConnectionConcurrencyTests.swift
+//  ConnectionsConcurrencyTests.swift
 //  ScopedStateTests
 //
 //  Created by Mikhail Apurin on 2026-08-10.
@@ -9,7 +9,7 @@ import Testing
 @testable import ScopedState
 
 @Suite("Concurrency connections")
-@MainActor struct ConnectionConcurrencyTests {
+@MainActor struct ConnectionsConcurrencyTests {
     @Test
     @available(macOS 15.0, iOS 18.0, watchOS 11.0, tvOS 18.0, visionOS 2.0, *)
     func sequenceProvidesInitialAndSubsequentValuesAndCancelsWithItsActivation() async {
@@ -82,7 +82,7 @@ import Testing
     func writableSequenceForwardsWritesToSetter() async {
         let (updates, updatesContinuation) = AsyncStream.makeStream(of: Int.self)
         var writtenValues: [Int] = []
-        let connection: Connection<Int>.Writable = .async(
+        let connection: WritableConnection<Int> = .async(
             updates,
             initialValue: 1
         ).set {

@@ -7,10 +7,10 @@
 
 import SwiftUI
 
-@MainActor private struct ScopeModifier<ParentScope, Definition: ValueDefinition>: ViewModifier {
-    @ScopedState<ParentScope, Definition, ReadOnlyValueProjection<Definition.Value>> private var scope: Definition.Value
+@MainActor private struct ScopeModifier<ParentScope, Configuration: Equatable, Scope>: ViewModifier {
+    @ScopedState<ParentScope, Configuration, Scope, ReadOnlyValueProjection<Scope>> private var scope: Scope
 
-    init(scope: ScopedState<ParentScope, Definition, ReadOnlyValueProjection<Definition.Value>>) {
+    init(scope: ScopedState<ParentScope, Configuration, Scope, ReadOnlyValueProjection<Scope>>) {
         self._scope = scope
     }
 
@@ -24,17 +24,17 @@ extension View {
     /// Connects a scope without configuration at this point in the SwiftUI view tree. The
     /// live session retains any state or container created by the connection until the
     /// subtree disappears.
-    @MainActor public func scope<ParentScope, Definition: ValueDefinition>(
-        _ keyPath: KeyPath<ParentScope, GenericConnection<Definition>>
-    ) -> some View where Definition.Configuration == EmptyConfiguration {
+    @MainActor public func scope<ParentScope, Scope>(
+        _ keyPath: KeyPath<ParentScope, Connection<Scope>>
+    ) -> some View {
         modifier(ScopeModifier(scope: ScopedState(keyPath)))
     }
 
     /// Connects a configured scope at this point in the SwiftUI view tree. The live session
     /// retains any state or container created by the connection until the subtree disappears.
-    @MainActor public func scope<ParentScope, Definition: ValueDefinition>(
-        _ keyPath: KeyPath<ParentScope, GenericConnection<Definition>>,
-        configuration: Definition.Configuration
+    @MainActor public func scope<ParentScope, Configuration: Equatable, Scope>(
+        _ keyPath: KeyPath<ParentScope, ConfiguredConnection<Scope, Configuration>>,
+        configuration: Configuration
     ) -> some View {
         modifier(ScopeModifier(scope: ScopedState(keyPath, configuration: configuration)))
     }

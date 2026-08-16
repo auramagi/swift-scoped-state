@@ -47,7 +47,7 @@ import UIKit
     }
 
     var readOnlyConnection: Connection<Value> {
-        Connection {
+        .readOnly {
             .init(
                 currentValue: { self.value },
                 observe: { self.observe($0) },
@@ -56,7 +56,7 @@ import UIKit
         }
     }
 
-    var writableConnection: Connection<Value>.Writable {
+    var writableConnection: WritableConnection<Value> {
         readOnlyConnection.set {
             self.writtenValues.append($0)
             self.send($0)
@@ -64,7 +64,7 @@ import UIKit
     }
 
     var unobservedConnection: Connection<Value> {
-        Connection {
+        .readOnly {
             .init { _ in
                 (
                     initialValue: self.value,

@@ -1,11 +1,19 @@
 //
-//  ValueProjection.swift
+//  ScopedStateProjection.swift
 //  ScopedState
 //
 //  Created by Mikhail Apurin on 2026-08-16.
 //
 
 import SwiftUI
+
+@MainActor @dynamicMemberLookup public struct ScopedStateProjection<Base> {
+    let base: Binding<Base>
+
+    public subscript<Value>(dynamicMember keyPath: ReferenceWritableKeyPath<Base, Value>) -> Binding<Value> {
+        base[dynamicMember: keyPath]
+    }
+}
 
 public protocol ValueProjection<Value>: SendableMetatype {
     associatedtype Value

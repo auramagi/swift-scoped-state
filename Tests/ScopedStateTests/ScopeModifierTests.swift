@@ -82,9 +82,9 @@ import Testing
     }
 
     @MainActor private struct ParentScope {
-        let configuredChild: Connection<ChildScope>.Configuration<Int>.Writable
+        let configuredChild: ConfiguredConnection<ChildScope, Int>
 
-        let child: Connection<ChildScope>.Writable
+        let child: Connection<ChildScope>
     }
 
     @MainActor private final class ConfiguredScopeSource {
@@ -108,12 +108,12 @@ import Testing
 
         private var observations: [Observation: ReceiveValue] = [:]
 
-        var connection: Connection<ChildScope>.Configuration<Int> {
-            Connection<ChildScope>.Configuration { configuration in
+        var connection: ConfiguredConnection<ChildScope, Int> {
+            .readOnly { configuration in
                 self.createdConfigurations.append(configuration)
                 self.currentScope = self.scope(for: configuration)
 
-                return Connection<ChildScope>.Configuration<Int>.Session(
+                return ConnectionSession<Int, ChildScope>(
                     currentValue: { self.currentScope },
                     observe: { self.observe($0) },
                     cancel: { self.cancel($0) },

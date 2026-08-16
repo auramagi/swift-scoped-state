@@ -1,5 +1,5 @@
 //
-//  ConnectionCombineTests.swift
+//  ConnectionsCombineTests.swift
 //  ScopedStateTests
 //
 //  Created by Mikhail Apurin on 2026-08-09.
@@ -10,14 +10,14 @@ import Testing
 @testable import ScopedState
 
 @Suite("Combine connections")
-@MainActor struct ConnectionCombineTests {
+@MainActor struct ConnectionsCombineTests {
     @Test
     func readOnlySubjectProvidesCurrentAndSubsequentValues() {
         let subject = CurrentValueSubject<Int, Never>(1)
         let connection: Connection<Int> = .subject(subject)
         let session = connection.makeSession(.init())
 
-        #expect(session.setValue == nil)
+        #expect(session.setValue != nil)
 
         var deliveredValues: [Int] = []
         let activation = session.activate {
@@ -39,7 +39,7 @@ import Testing
     @Test
     func writableSubjectInfersSubjectSend() {
         let subject = CurrentValueSubject<Int, Never>(1)
-        let connection: Connection<Int>.Writable = .subject(subject)
+        let connection: WritableConnection<Int> = .subject(subject)
         let session = connection.makeSession(.init())
 
         let setValue = session.setValue
@@ -63,7 +63,7 @@ import Testing
     func subjectCanUseACustomSetter() {
         let subject = CurrentValueSubject<Int, Never>(1)
         var writtenValues: [Int] = []
-        let connection: Connection<Int>.Writable = .subject(subject).set {
+        let connection: WritableConnection<Int> = .subject(subject).set {
             writtenValues.append($0)
         }
         let session = connection.makeSession(.init())
@@ -110,7 +110,7 @@ import Testing
     func mappedWritableSubjectForwardsMappedWritesToCustomSetter() {
         let subject = CurrentValueSubject<Int, Never>(2)
         var writtenValues: [String] = []
-        let connection: Connection<String>.Writable = .subject(subject)
+        let connection: WritableConnection<String> = .subject(subject)
             .map { "value=\($0)" }
             .set { writtenValues.append($0) }
         let session = connection.makeSession(.init())
@@ -164,7 +164,7 @@ import Testing
     func writablePublisherForwardsWritesToSetter() {
         let publisher = PassthroughSubject<Int, Never>()
         var writtenValues: [Int] = []
-        let connection: Connection<Int>.Writable = .publisher(
+        let connection: WritableConnection<Int> = .publisher(
             publisher,
             initialValue: 1
         ).set {
@@ -224,7 +224,7 @@ import Testing
     func writableCurrentValuePublisherForwardsWrites() {
         let publisher = PassthroughSubject<Int, Never>()
         var writtenValues: [Int] = []
-        let connection: Connection<Int>.Writable = .publisher(
+        let connection: WritableConnection<Int> = .publisher(
             publisher,
             currentValue: { 1 }
         ).set {

@@ -120,7 +120,7 @@ import Testing
     }
 
     @MainActor private struct WritableScope {
-        let model: Connection<EquatableModel>.Writable
+        let model: WritableConnection<EquatableModel>
     }
 
     @MainActor private final class WritableContainer {

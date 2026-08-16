@@ -1,5 +1,5 @@
 //
-//  ConnectionObservationTests.swift
+//  ConnectionsObservationTests.swift
 //  ScopedStateTests
 //
 //  Created by Mikhail Apurin on 2026-08-10.
@@ -11,7 +11,7 @@ import Testing
 @testable import ScopedState
 
 @Suite("Observation connections")
-@MainActor struct ConnectionObservationTests {
+@MainActor struct ConnectionsObservationTests {
     @Test
     func expressionInvalidatesThenRefreshesItsCurrentValue() {
         let model = Model(value: 1)
@@ -104,7 +104,7 @@ import Testing
     @Test
     func writableKeyPathInfersPropertyMutation() {
         let model = Model(value: 1)
-        let connection: Connection<Int>.Writable = .observation(model, \Model.value)
+        let connection: WritableConnection<Int> = .observation(model, \Model.value)
         let session = connection.makeSession(.init())
 
         var invalidationCount = 0
@@ -124,8 +124,7 @@ import Testing
     @Test
     func expressionSupportsConnectionComposition() {
         let model = Model(value: 1)
-        let connection: Connection<String>.Writable = Connection<Int>
-            .observation { model.value }
+        let connection: WritableConnection<String> = .observation { model.value }
             .map(String.init)
             .set { model.value = Int($0) ?? 0 }
         let session = connection.makeSession(.init())

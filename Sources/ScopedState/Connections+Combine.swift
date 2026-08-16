@@ -1,5 +1,5 @@
 //
-//  Connection+Combine.swift
+//  Connections+Combine.swift
 //  ScopedState
 //
 //  Created by Mikhail Apurin on 2026-08-09.
@@ -7,25 +7,18 @@
 
 import Combine
 
-extension GenericConnection where Definition.Configuration == EmptyConfiguration {
-    /// Creates a read-only connection to a current-value subject.
+extension ConnectionDefinition where Self == Connections {
+    /// Creates a writable connection to a current-value subject.
     public static func subject<WrappedValue>(
         _ subject: CurrentValueSubject<WrappedValue, Never>
-    ) -> Connection<WrappedValue> {
-        Connection<WrappedValue> {
+    ) -> some WritableConnectionDefinition<EmptyConfiguration, WrappedValue> {
+        let connection = ReadOnlyConnectionDefinition { _ in
             .init(
                 currentValue: { subject.value },
                 observe: { subject.sink(receiveValue: $0) },
                 cancel: { $0.cancel() }
             )
         }
-    }
-
-    /// Creates a writable connection to a current-value subject.
-    public static func subject<WrappedValue>(
-        _ subject: CurrentValueSubject<WrappedValue, Never>
-    ) -> Connection<WrappedValue>.Writable {
-        let connection: Connection<WrappedValue> = .subject(subject)
         return connection.set { subject.send($0) }
     }
 
@@ -34,8 +27,8 @@ extension GenericConnection where Definition.Configuration == EmptyConfiguration
     public static func publisher<Updates: Publisher, WrappedValue>(
         _ publisher: Updates,
         initialValue: WrappedValue
-    ) -> Connection<WrappedValue> where Updates.Output == WrappedValue, Updates.Failure == Never {
-        Connection<WrappedValue> {
+    ) -> some ConnectionDefinition<EmptyConfiguration, WrappedValue> where Updates.Output == WrappedValue, Updates.Failure == Never {
+        ReadOnlyConnectionDefinition { _ in
             .init(
                 initialValue: initialValue,
                 observe: { publisher.sink(receiveValue: $0) },
@@ -49,8 +42,8 @@ extension GenericConnection where Definition.Configuration == EmptyConfiguration
     public static func publisher<Updates: Publisher, WrappedValue>(
         _ publisher: Updates,
         currentValue: @escaping () -> WrappedValue
-    ) -> Connection<WrappedValue> where Updates.Output == WrappedValue, Updates.Failure == Never {
-        Connection<WrappedValue> {
+    ) -> some ConnectionDefinition<EmptyConfiguration, WrappedValue> where Updates.Output == WrappedValue, Updates.Failure == Never {
+        ReadOnlyConnectionDefinition { _ in
             .init(
                 currentValue: currentValue,
                 observe: { publisher.sink(receiveValue: $0) },
