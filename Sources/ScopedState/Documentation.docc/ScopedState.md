@@ -11,7 +11,7 @@ connection definitions. A container provides the root scope, and
 ``ScopedState`` resolves individual connections with static key paths.
 
 ```swift
-@MainActor struct SettingsScope {
+struct SettingsScope {
     let isEnabled: WritableConnection<Bool>
 }
 

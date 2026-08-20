@@ -11,7 +11,7 @@
 /// with ``ScopedState``.
 ///
 /// ```swift
-/// @MainActor struct AppScope {
+/// struct AppScope {
 ///     let title: Connection<String>
 /// }
 /// ```

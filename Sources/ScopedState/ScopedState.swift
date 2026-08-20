@@ -14,7 +14,7 @@ import SwiftUI
 /// value to the view.
 ///
 /// ```swift
-/// @MainActor struct SettingsScope {
+/// struct SettingsScope {
 ///     let isEnabled: WritableConnection<Bool>
 /// }
 ///

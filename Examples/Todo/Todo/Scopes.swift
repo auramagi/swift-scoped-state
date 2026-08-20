@@ -7,7 +7,7 @@
 
 import ScopedState
 
-@MainActor struct AppScope {
+struct AppScope {
     let addTodo: Connection<() -> Void>
 
     let todos: Connection<[Todo.ID]>
@@ -15,7 +15,7 @@ import ScopedState
     let todoScope: ConfiguredConnection<TodoScope, Todo.ID>
 }
 
-@MainActor struct TodoScope {
+struct TodoScope {
     let delete: Connection<() -> Void>
 
     let isCompleted: WritableConnection<Bool>
