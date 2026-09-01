@@ -174,7 +174,7 @@ Scopes are injected and resolved through the SwiftUI environment. Injecting a ne
 |---|---|
 | [`container(_:scope:)`](https://auramagi.github.io/swift-scoped-state/documentation/scopedstate/swiftuicore/view/container(_:scope:)) | Inject a scope from a container instance and a key path |
 | [`scope(_:)`](https://auramagi.github.io/swift-scoped-state/documentation/scopedstate/swiftuicore/view/scope(_:)) | Inject a child scope by resolving a connection from another scope |
-| [`scope(_:configuration:)`](https://auramagi.github.io/swift-scoped-state/documentation/scopedstate/swiftuicore/view/scope(_:configuration:)) | Inject a child scope by resolving a connection from another scope using a configratiuon value |
+| [`scope(_:configuration:)`](https://auramagi.github.io/swift-scoped-state/documentation/scopedstate/swiftuicore/view/scope(_:configuration:)) | Inject a child scope by resolving a connection from another scope using a configration value |
 
 ### Connections
 

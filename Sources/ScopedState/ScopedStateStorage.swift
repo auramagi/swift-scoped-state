@@ -9,7 +9,7 @@ import Observation
 
 /// The observable value storage used both by connected properties and as the
 /// exact scope type stored in SwiftUI's environment.
-@MainActor @Observable final class ScopedStateStorage<Value> {
+@MainActor @Observable public final class ScopedStateStorage<Value> {
     @ObservationIgnored
     private var state: (value: Value?, generation: UInt) = (nil, 0)
 
@@ -42,7 +42,7 @@ import Observation
         withMutation(keyPath: \.state) {}
     }
 
-    var requiredValue: Value {
+    public var requiredValue: Value {
         if let value {
             value
         } else {

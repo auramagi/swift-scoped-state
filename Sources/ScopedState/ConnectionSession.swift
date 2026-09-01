@@ -44,15 +44,15 @@
     public typealias Yield = @MainActor (Update) -> Void
 
     /// Starts observation and returns its initial value and observation token.
-    let activate: (@escaping Yield) -> Activation
+    public let activate: (@escaping Yield) -> Activation
 
     /// Optionally refreshes the current value without delivering an update.
-    let refresh: () -> Value?
+    public let refresh: () -> Value?
 
     /// Updates the external implementation before starting a new activation.
-    let reconfigure: (Configuration) -> Void
+    public let reconfigure: (Configuration) -> Void
 
-    let setValue: ((Value) -> Void)?
+    public let setValue: ((Value) -> Void)?
 
     /// Creates a configurable session from its lifecycle operations.
     ///
