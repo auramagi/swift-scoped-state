@@ -98,7 +98,7 @@ struct AppView: View {
 ### Documentation
 
 - [API Reference](https://auramagi.github.io/swift-scoped-state/documentation/scopedstate/)
-- [Blog article](https://apurin.me/articles/abstracting-swiftui-state-with-scopes/)
+- [Abstracting SwiftUI State with Scopes](https://apurin.me/articles/abstracting-swiftui-state-with-scopes/)
 
 ### Requirements
 
@@ -129,7 +129,7 @@ Add the `ScopedState` product to your target, then choose the dependency rule fo
 Add ScopedState to the package dependencies:
 
 ```swift
-.package(url: "https://github.com/auramagi/swift-scoped-state", from: "0.1.0-b.7"),
+.package(url: "https://github.com/auramagi/swift-scoped-state", from: "0.1.0"),
 ```
 
 Add the `ScopedState` product to each target that imports it:
