@@ -98,6 +98,7 @@ struct AppView: View {
 ### Documentation
 
 - [API Reference](https://auramagi.github.io/swift-scoped-state/documentation/scopedstate/)
+- [Blog article](https://apurin.me/articles/abstracting-swiftui-state-with-scopes/)
 
 ### Requirements
 
