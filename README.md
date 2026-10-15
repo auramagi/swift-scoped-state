@@ -1,6 +1,6 @@
 # ScopedState
 
-ScopedState lets SwiftUI views declare state connected to external sources. Each connection belongs to a scope, which is supplied by containers and is resolved through the environment.
+ScopedState lets SwiftUI views declare state connected to external sources. Containers supply scopes through the environment, and views select connections from those scopes.
 
 [![Documentation](https://img.shields.io/badge/Documentation-DocC-blue)](https://auramagi.github.io/swift-scoped-state/documentation/scopedstate/)
 ![Platforms](https://img.shields.io/badge/Platforms-iOS%20%7C%20macOS%20%7C%20tvOS%20%7C%20watchOS%20%7C%20visionOS-lightgrey)
@@ -27,9 +27,9 @@ ScopedState lets SwiftUI views declare state connected to external sources. Each
 
 Some application state follows a particular view's lifetime even though its initial value and updates come from an external source.
 
-To solve this problem, a **connection** to a source can be defined within a **scope**. A view then accesses that connection by declaring state with the **`@ScopedState`** property wrapper and the corresponding key path. **Read-only** connections provide immutable values to a view's `body`, while **read-write** ones provide writable two-way values using SwiftUI `Binding`.
+A **scope** declares **connections** to external sources. A view selects a connection with the **`@ScopedState`** property wrapper and a key path. Read-only connections let the view read the value. Writable connections also provide a SwiftUI `Binding` for writing back to the source.
 
-When the view appears, ScopedState resolves this connection and keeps it active until the view is destroyed, applying updates as they arrive.
+ScopedState resolves the connection before SwiftUI evaluates the view's body. It keeps the connection active for the lifetime of the view's state and applies updates as they arrive. That state can outlive the view's appearance on screen, for example in a navigation stack.
 
 ```swift
 struct TodoScope {
@@ -53,7 +53,7 @@ struct TodoRow: View {
 }
 ```
 
-Scopes can provide connections to **child scopes**. In the todo example, an app-wide scope provides a connection to todo-specific scopes. This connection is defined as being **configured** by the todo ID, since it needs to know which todo item to represent.
+Scopes can also provide connections to **child scopes**. Here, `AppScope` provides a `TodoScope` for each todo. The connection takes a todo ID as its **configuration** to select which item it represents.
 
 ```swift
 struct AppScope {
@@ -76,7 +76,7 @@ struct TodoListView: View {
 }
 ```
 
-A parent view uses a **container** to create scope instances containing concrete connection implementations, then injects them into the environment.
+A **container** assembles the connections into a scope. A parent view provides that scope through the environment with `.container(_:scope:)`.
 
 ```swift
 class AppContainer {
@@ -144,7 +144,7 @@ Add the `ScopedState` product to each target that imports it:
 
 A scope is a Swift type that contains connection definitions. It doesn't require any protocol conformances.
 
-Scopes serve to provide semantic grouping for state or actions that belong together. A `RootScope` or an `AppScope` suggests global state, while a `ProductScope` or a `BookScope` suggest state that is specifically tied to a particular product or a book.
+Scopes group related state and actions. A `RootScope` or `AppScope` might provide state for the whole app, while a `ProductScope` or `BookScope` might represent one product or book.
 
 ```swift
 struct ProductScope {
@@ -160,35 +160,35 @@ struct ProductScope {
 }
 ```
 
-In this example, state is product-scoped, meaning that it implies knowledge of which product it represents. Views aren't required to have this knowledge, but get to use simple state like `name` or `isFavorite`. 
+This `ProductScope` represents a particular product. Its views can read `name`, change `isFavorite`, or call `buy` without passing a product ID to each operation.
 
-Scopes can declare connections that resolve to other child scopes. This connection can be unconfigured when the parent scope contains all necessary context, or configured when it needs another value. In the example above, reviewScope is configured by a Review.ID and resolves a ReviewScope for that review. Views under the child scope can then use review-specific state without receiving the review ID themselves.
+A child-scope connection needs no configuration if the parent scope already has enough context to select it. Otherwise, the caller supplies a configuration value. Here, `reviewScope` takes a `Review.ID` and resolves a `ReviewScope` for that review. Descendant views use the review's state without receiving the ID themselves.
 
 ```swift
 ReviewView()
   .scope(\ProductScope.reviewScope, configuration: reviewID)
 ```
 
-Scopes are injected and resolved through the SwiftUI environment. Injecting a new scope instance when one of the same type already exists in the environment will override it for child views, following the normal SwiftUI rules.
+Scopes use the SwiftUI environment. Providing a scope overrides any ancestor's scope of the same type for descendant views.
 
 | Modifier | Description |
 |---|---|
 | [`container(_:scope:)`](https://auramagi.github.io/swift-scoped-state/documentation/scopedstate/swiftuicore/view/container(_:scope:)) | Inject a scope from a container instance and a key path |
 | [`scope(_:)`](https://auramagi.github.io/swift-scoped-state/documentation/scopedstate/swiftuicore/view/scope(_:)) | Inject a child scope by resolving a connection from another scope |
-| [`scope(_:configuration:)`](https://auramagi.github.io/swift-scoped-state/documentation/scopedstate/swiftuicore/view/scope(_:configuration:)) | Inject a child scope by resolving a connection from another scope using a configration value |
+| [`scope(_:configuration:)`](https://auramagi.github.io/swift-scoped-state/documentation/scopedstate/swiftuicore/view/scope(_:configuration:)) | Inject a child scope by resolving a connection from another scope using a configuration value |
 
 ### Connections
 
-A connection is a definition that creates a session between one `@ScopedState` property and its source. Its type records three parts of that contract: whether configuration is required, which value is delivered, and whether the value can be written back.
+A connection definition creates a session between one `@ScopedState` property and its source. Its type specifies the value it supplies, whether it takes a configuration, and whether it accepts writes.
 
 |  | Read-Only | Read-Write |
 |---|---|---|
 | Not configured |  [`Connection`](https://auramagi.github.io/swift-scoped-state/documentation/scopedstate/connection) | [`WritableConnection`](https://auramagi.github.io/swift-scoped-state/documentation/scopedstate/writableconnection) |
 | Configured | [`ConfiguredConnection`](https://auramagi.github.io/swift-scoped-state/documentation/scopedstate/configuredconnection) | [`WritableConfiguredConnection`](https://auramagi.github.io/swift-scoped-state/documentation/scopedstate/writableconfiguredconnection) |
 
-Unconfigured connections need no runtime input. Configured connections accept an `Equatable` value such as an entity ID, route, or filter. If that configuration changes while the view keeps its identity, ScopedState reconfigures and reactivates the existing session instead of requiring a new view.
+Unconfigured connections need no runtime input. Configured connections accept an `Equatable` value such as an entity ID, route, or filter. When that value changes, ScopedState reconfigures and reactivates the existing session. The view can keep its identity.
 
-Read-only controls replacement of the connected value. It doesn't make a referenced object immutable. A read-only connection to a model can still expose bindings to that object's writable properties while preventing the view from replacing the model itself:
+Read-only connections prevent replacement of the connected value. An object's properties can still be writable. In this example, the view can edit `title` through a binding but can't replace `model`:
 
 ```swift
 @Observable final class EditorModel {
@@ -208,11 +208,11 @@ struct EditorView: View {
 }
 ```
 
-A writable connection exposes `Binding<Value>` as the property's projection, so `$isCompleted` can be passed directly to SwiftUI controls. A writable definition can also be stored behind a read-only declaration when a particular scope shouldn't expose its write operation. Prefer the narrowest declaration that the consuming views need.
+A writable connection exposes `Binding<Value>` through `$property`, so you can pass `$isCompleted` to a SwiftUI control. You can also assign a writable definition to a read-only scope property to withhold root write access from its views.
 
 ### Connection Sources
 
-Connection factories adapt common state sources into connection definitions. Use leading-dot syntax when a property's declared type supplies enough context, or spell the `Connections` namespace explicitly when it doesn't:
+Connection factories create definitions for common sources. When the declared type is a connection, call the factory with a leading dot. Otherwise, use `Connections`:
 
 ```swift
 let inferred = Connections.constant(42)
@@ -224,7 +224,7 @@ When a source has a synchronous current-value getter, prefer that overload to a 
 
 #### Observation
 
-Use `observation` for state managed by Swift Observation. The closure form tracks every observable property read while computing the value and evaluates again after one of those dependencies changes. The key-path forms connect a single property and infer write access from the key path:
+Use `observation` for state managed by Swift Observation. The closure form tracks the observable properties it reads. After a tracked property changes, the connection evaluates the closure again during the next SwiftUI update. The key-path forms connect a single property, with write access determined by the key path:
 
 ```swift
 let summary: Connection<String> = .observation {
@@ -247,7 +247,7 @@ let message: Connection<Message> = .async(
 )
 ```
 
-The asynchronous sequence factories require iOS 18, macOS 15, tvOS 18, watchOS 11, or visionOS 2 even though the rest of the package supports the earlier versions listed above.
+The asynchronous sequence factories require iOS 18, macOS 15, tvOS 18, watchOS 11, or visionOS 2. Other connection sources support the earlier versions listed in Requirements.
 
 #### Combine
 
@@ -272,7 +272,7 @@ let buildNumber: Connection<Int> = .constant(42)
 let selection: WritableConnection<Todo.ID?> = .initial(nil)
 ```
 
-Each `@ScopedState` property connected through `initial` owns an independent value. That value resets when the connection identity is recreated, so it is appropriate for scoped UI state but not for data that must outlive the view.
+Each `@ScopedState` property connected through `initial` owns an independent value that resets when the connection identity changes. Use an external store for data that must outlive the property's state.
 
 #### Custom
 
@@ -302,13 +302,13 @@ The wrapped property always reads as `Value`. Its projected value reflects the d
 - `WritableConnection` and `WritableConfiguredConnection` expose `Binding<Value>`.
 - Read-only connections expose a projection only for writable members of reference values; they don't expose a binding that can replace the root value.
 
-A consuming view must have a matching `.container` or `.scope` provider above it. Keep the key path semantic—`\SettingsScope.isEnabled` says more about the view's dependency than the source technology used to implement it.
+A consuming view must have a matching `.container` or `.scope` provider above it. A key path such as `\SettingsScope.isEnabled` identifies the state the view needs without specifying how the container supplies it.
 
 ### Containers
 
-A container is a reference type that owns the concrete dependencies behind a root scope. It may hold stores, clients, coordinators, or child containers; ScopedState only requires a key path to the scope value it provides.
+A container is an object that provides a scope. It can hold stores, clients, or child containers, but ScopedState places no requirements on those dependencies. It only needs a key path to the scope.
 
-Attach the container at the boundary where its scope becomes valid:
+Provide the container's scope above the views that use it:
 
 ```swift
 @State private var container = AppContainer()
@@ -319,13 +319,13 @@ var body: some View {
 }
 ```
 
-Keep the container's identity stable, usually with `@State`. Descendants can derive narrower scopes with `.scope(_:)` or `.scope(_:configuration:)`; the modifier keeps the child connection active for the lifetime of that part of the view hierarchy. In practice, containers own implementations, scopes declare interfaces, and views select only the connections they use.
+Keep the container's identity stable, usually with `@State`. Descendants can derive child scopes with `.scope(_:)` or `.scope(_:configuration:)`. Each modifier keeps its connection active for the lifetime of its SwiftUI state.
 
 ## Advanced Usage
 
 ### Adding Write Access
 
-The `set` transformation adds or replaces a connection's write operation without changing how it reads. This is useful when an existing publisher, asynchronous sequence, or mapped connection already describes the update path:
+The `set` transformation adds or replaces a connection's setter. It keeps the connection's existing source of updates:
 
 ```swift
 let progress: WritableConnection<Double> = .publisher(
@@ -335,7 +335,7 @@ let progress: WritableConnection<Double> = .publisher(
 .set { progressStore.progress = $0 }
 ```
 
-A write is forwarded to the supplied closure; it doesn't silently become a second source of truth inside `@ScopedState`. The source should publish the resulting value or make it available through its current-value getter. If it can't do either, use a custom session that defines the intended local update behavior.
+Writes call the supplied closure. They don't directly update the value stored by `@ScopedState`. The source must deliver the resulting change through the connection's update mechanism. A custom session can yield the new value or invalidate the stored value and return a new one from `refresh`.
 
 ### `ObservableObject` Support
 
@@ -359,11 +359,11 @@ struct CounterView: View {
 }
 ```
 
-This keeps ownership in the container while giving the view the update behavior it would expect from an observed object. The connection remains read-only at the root: `$model.count` can mutate `count`, but the view can't replace `model`. Use a writable connection only when replacing the object is part of the view's contract.
+Changes to `count` update the view. The read-only connection lets `$model.count` mutate the property without letting the view replace `model`. Declare a writable connection if the view also needs to replace the object.
 
 ### Previews with `PreviewTrait`
 
-A preview needs the same scope provider as the running view. A `PreviewModifier` can create the container once, attach its scope, and package that setup as a reusable trait:
+A preview needs a provider for each scope its views use. A `PreviewModifier` can create a shared container and provide its scope through a reusable trait:
 
 ```swift
 struct SampleAppScopePreviewModifier: PreviewModifier {
@@ -388,7 +388,7 @@ extension PreviewTrait where T == Preview.ViewTraits {
 }
 ```
 
-Define separate traits for meaningful states—such as populated, empty, loading, or failed—by changing the container created in `makeSharedContext()`. Apply the trait at the highest view that needs the scope; child views then exercise the same connection path they use in the app.
+Define traits for populated, empty, loading, or failed previews by changing the container created in `makeSharedContext()`. Apply the trait to the preview that contains the consuming views. Its descendants resolve connections as they do in the app.
 
 ## License
 
