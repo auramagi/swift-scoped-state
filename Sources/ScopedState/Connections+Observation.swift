@@ -54,9 +54,9 @@ import Observation
 extension ConnectionDefinition where Self == Connections {
     /// Creates a read-only connection to values tracked by Observation.
     ///
-    /// The closure is evaluated with observation tracking whenever the
-    /// connection needs its current value. Changes to tracked properties must
-    /// be made on the main actor.
+    /// The connection tracks observable properties read by `currentValue`.
+    /// When one changes, the connection reads the value again during the next
+    /// SwiftUI update. Change tracked properties on the main actor.
     ///
     /// ```swift
     /// let summary: Connection<String> = .observation {
@@ -64,9 +64,7 @@ extension ConnectionDefinition where Self == Connections {
     /// }
     /// ```
     ///
-    /// - Parameter currentValue: An expression that reads the observable state
-    ///   used to produce the connected value.
-    /// - Returns: A read-only Observation-backed connection definition.
+    /// - Parameter currentValue: Computes the value from observable properties.
     public static func observation<WrappedValue>(
         _ currentValue: @escaping () -> WrappedValue
     ) -> some ConnectionDefinition<EmptyConfiguration, WrappedValue> {
@@ -96,7 +94,6 @@ extension ConnectionDefinition where Self == Connections {
     /// - Parameters:
     ///   - root: The observable object that owns the property.
     ///   - keyPath: A read-only key path to the connected property.
-    /// - Returns: A read-only Observation-backed connection definition.
     public static func observation<Root: Observable, WrappedValue>(
         _ root: Root,
         _ keyPath: KeyPath<Root, WrappedValue>
@@ -109,7 +106,6 @@ extension ConnectionDefinition where Self == Connections {
     /// - Parameters:
     ///   - root: The observable object that owns the property.
     ///   - keyPath: A reference-writable key path to the connected property.
-    /// - Returns: A writable Observation-backed connection definition.
     public static func observation<Root: Observable, WrappedValue>(
         _ root: Root,
         _ keyPath: ReferenceWritableKeyPath<Root, WrappedValue>

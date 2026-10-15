@@ -5,10 +5,10 @@ the SwiftUI environment.
 
 ## Overview
 
-ScopedState separates the interface a view consumes from the implementation
-that supplies it. A scope declares the available state and operations as
-connection definitions. A container provides the root scope, and
-``ScopedState`` resolves individual connections with static key paths.
+A scope declares the connections available to a view. A container supplies
+their implementations and provides the scope through the environment.
+``ScopedState`` selects a connection with a key path and retains its value for
+the lifetime of the view's SwiftUI state.
 
 ```swift
 struct SettingsScope {
@@ -27,13 +27,13 @@ SettingsView()
     .container(container, scope: \.settingsScope)
 ```
 
-The container decides how each connection is backed. Built-in factories adapt
-Observation, Swift Concurrency, Combine, constants, and property-local state.
-Custom sessions can integrate other update mechanisms.
+Connections can receive updates through Observation, asynchronous sequences,
+or Combine. They can also supply constants or give each consuming property its
+own writable value. Use a custom session for other sources.
 
-Use child scopes to add context to a smaller part of a view hierarchy. A
-configured child scope can represent one entity without requiring every view
-and operation in that subtree to accept the entity identifier.
+A child scope can represent a particular entity. For example, configure a
+`RoomScope` with a room ID so its views can read the room's name and change its
+settings without passing the ID to each operation.
 
 ## Topics
 

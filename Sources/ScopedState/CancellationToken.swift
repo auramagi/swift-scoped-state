@@ -5,7 +5,7 @@
 //  Created by Mikhail Apurin on 2026-08-09.
 //
 
-/// An idempotent cancellation action that also runs when the token is released.
+/// Runs a cancellation action once, on explicit cancellation or deinitialization.
 public final class CancellationToken {
     private var cancellation: (() -> Void)?
 

@@ -20,13 +20,10 @@ import SwiftUI
     }
 }
 
-/// Adds child-scope provision to SwiftUI views.
 extension View {
-    /// Derives and provides an unconfigured child scope at this point in the
-    /// view hierarchy.
+    /// Resolves an unconfigured child scope and provides it to descendant views.
     ///
-    /// The active connection retains resources created for the child scope for
-    /// the lifetime of this modifier's SwiftUI state.
+    /// The connection stays active for the lifetime of this modifier's SwiftUI state.
     ///
     /// - Parameter keyPath: A key path from the current scope to a child-scope
     ///   connection.
@@ -37,8 +34,7 @@ extension View {
         modifier(ScopeModifier(scope: ScopedState(keyPath)))
     }
 
-    /// Derives and provides a configured child scope at this point in the view
-    /// hierarchy.
+    /// Resolves a configured child scope and provides it to descendant views.
     ///
     /// ```swift
     /// ForEach(todoIDs, id: \.self) { id in
@@ -47,9 +43,8 @@ extension View {
     /// }
     /// ```
     ///
-    /// The active connection retains resources created for the child scope for
-    /// the lifetime of this modifier's SwiftUI state. Changing `configuration`
-    /// reconfigures the connection for the new context.
+    /// The connection stays active for the lifetime of this modifier's SwiftUI
+    /// state. Changing `configuration` reconfigures the connection.
     ///
     /// - Parameters:
     ///   - keyPath: A key path from the current scope to a configured

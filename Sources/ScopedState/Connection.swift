@@ -19,24 +19,22 @@ public typealias Connection<Value> = any ConnectionDefinition<EmptyConfiguration
 
 /// A writable connection that requires no configuration.
 ///
-/// The projection of a writable scoped property is a SwiftUI binding to its
-/// connected value.
+/// A view accesses the value's SwiftUI binding through `$property`.
 public typealias WritableConnection<Value> = any WritableConnectionDefinition<EmptyConfiguration, Value>
 
-/// A read-only connection established with an equatable configuration.
+/// A read-only connection that takes an equatable configuration.
 ///
-/// Use a configured connection to derive a scope or value for a particular
-/// context, such as an entity identifier.
+/// Use the configuration to select a value or child scope, for example by
+/// passing an entity identifier.
 public typealias ConfiguredConnection<Value, Configuration: Equatable> = any ConnectionDefinition<Configuration, Value>
 
-/// A writable connection established with an equatable configuration.
+/// A writable connection that takes an equatable configuration.
 public typealias WritableConfiguredConnection<Value, Configuration: Equatable> = any WritableConnectionDefinition<Configuration, Value>
 
 /// A definition that creates connection sessions for scoped state.
 ///
-/// Most code works with ``Connection``, ``ConfiguredConnection``, and the
-/// factory methods on ``Connections`` instead of conforming to this protocol
-/// directly.
+/// Declare scope properties with ``Connection`` or ``ConfiguredConnection``
+/// and create their definitions with the factories on ``Connections``.
 @MainActor public protocol ConnectionDefinition<Configuration, Value>: SendableMetatype {
     /// The configuration used to establish and update a session.
     associatedtype Configuration: Equatable
@@ -47,24 +45,22 @@ public typealias WritableConfiguredConnection<Value, Configuration: Equatable> =
     /// Creates a session for the supplied configuration.
     ///
     /// - Parameter configuration: The configuration for the new session.
-    /// - Returns: A session that connects scoped state to its source.
     func makeSession(_ configuration: Configuration) -> ConnectionSession<Configuration, Value>
 }
 
 /// A connection definition that supports writing its connected value.
 ///
-/// Writable definitions can satisfy read-only ``Connection`` declarations,
-/// but read-only definitions can't satisfy writable declarations.
+/// A writable definition can be stored in a read-only ``Connection`` property.
+/// A writable property requires a writable definition.
 public protocol WritableConnectionDefinition<Configuration, Value>: ConnectionDefinition { }
 
 /// A concrete read-only connection definition returned by connection factories.
 public struct ReadOnlyConnectionDefinition<Configuration: Equatable, Value>: ConnectionDefinition {
     let createSession: (Configuration) -> ConnectionSession<Configuration, Value>
 
-    /// Creates a read-only session for the supplied configuration.
+    /// Creates a session for the supplied configuration.
     ///
     /// - Parameter configuration: The configuration for the new session.
-    /// - Returns: A session that receives values from its source.
     public func makeSession(_ configuration: Configuration) -> ConnectionSession<Configuration, Value> {
         createSession(configuration)
     }
@@ -77,13 +73,12 @@ public struct ReadWriteConnectionDefinition<Configuration: Equatable, Value>: Wr
     /// Creates a writable session for the supplied configuration.
     ///
     /// - Parameter configuration: The configuration for the new session.
-    /// - Returns: A session that receives and writes values.
     public func makeSession(_ configuration: Configuration) -> ConnectionSession<Configuration, Value> {
         createSession(configuration)
     }
 }
 
-/// The configuration used by connections that require no configuration.
+/// A placeholder for connections that take no configuration.
 public struct EmptyConfiguration: Equatable {
     /// Creates an empty configuration.
     public init() { }
@@ -126,13 +121,11 @@ private extension ConnectionSession {
 }
 
 extension ConnectionDefinition {
-    /// Transforms every delivered value into a read-only connection.
+    /// Creates a read-only connection by transforming the source's values.
     ///
-    /// The transformed definition preserves the source configuration and
-    /// lifecycle behavior, but doesn't expose a write operation.
+    /// The new connection uses the source's configuration and lifecycle.
     ///
     /// - Parameter transform: A closure that transforms a delivered value.
-    /// - Returns: A read-only definition for the transformed value.
     public func map<MappedValue>(
         _ transform: @escaping (Value) -> MappedValue
     ) -> some ConnectionDefinition<Configuration, MappedValue> {
@@ -167,13 +160,13 @@ extension ConnectionDefinition {
 }
 
 extension WritableConnectionDefinition {
-    /// Bidirectionally transforms values delivered by and written through this
-    /// connection while preserving its configuration and lifecycle behavior.
+    /// Creates a writable connection by transforming reads and writes.
+    ///
+    /// The new connection uses the source's configuration and lifecycle.
     ///
     /// - Parameters:
     ///   - get: A closure that transforms values delivered by the source.
     ///   - set: A closure that maps a written value back to the source value.
-    /// - Returns: A writable definition for the transformed value.
     public func map<MappedValue>(
         get: @escaping (Value) -> MappedValue,
         set: @escaping (MappedValue) -> Value

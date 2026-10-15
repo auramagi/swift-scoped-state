@@ -7,8 +7,8 @@
 
 /// A namespace for constructing connection definitions.
 ///
-/// When an expected connection type is available, Swift can infer this
-/// namespace from leading-dot factory syntax.
+/// When the declared type is a connection, you can omit `Connections` and
+/// call a factory with a leading dot.
 ///
 /// ```swift
 /// let fixed: Connection<Int> = .constant(42)
@@ -19,9 +19,7 @@ public typealias Connections = ReadOnlyConnectionDefinition<EmptyConfiguration, 
 extension ConnectionDefinition where Self == Connections {
     /// Creates a configured read-only connection from a session factory.
     ///
-    /// - Parameter makeSession: A closure that creates a session for each
-    ///   configuration.
-    /// - Returns: A configured read-only connection definition.
+    /// - Parameter makeSession: Creates a session using the supplied configuration.
     public static func readOnly<Configuration: Equatable, Value>(
         _ makeSession: @escaping (Configuration) -> ConnectionSession<Configuration, Value>
     ) -> some ConnectionDefinition<Configuration, Value> {
@@ -30,8 +28,7 @@ extension ConnectionDefinition where Self == Connections {
 
     /// Creates an unconfigured read-only connection from a session factory.
     ///
-    /// - Parameter makeSession: A closure that creates the connection session.
-    /// - Returns: A read-only connection definition.
+    /// - Parameter makeSession: Creates a session for each connected property.
     public static func readOnly<Value>(
         _ makeSession: @escaping () -> ConnectionSession<EmptyConfiguration, Value>
     ) -> some ConnectionDefinition<EmptyConfiguration, Value> {
@@ -40,9 +37,7 @@ extension ConnectionDefinition where Self == Connections {
 
     /// Creates a configured writable connection from a session factory.
     ///
-    /// - Parameter makeSession: A closure that creates a session for each
-    ///   configuration.
-    /// - Returns: A configured writable connection definition.
+    /// - Parameter makeSession: Creates a session using the supplied configuration.
     public static func readWrite<Configuration: Equatable, Value>(
         _ makeSession: @escaping (Configuration) -> ConnectionSession<Configuration, Value>
     ) -> some WritableConnectionDefinition<Configuration, Value> {
@@ -51,8 +46,7 @@ extension ConnectionDefinition where Self == Connections {
 
     /// Creates an unconfigured writable connection from a session factory.
     ///
-    /// - Parameter makeSession: A closure that creates the connection session.
-    /// - Returns: A writable connection definition.
+    /// - Parameter makeSession: Creates a session for each connected property.
     public static func readWrite<Value>(
         _ makeSession: @escaping () -> ConnectionSession<EmptyConfiguration, Value>
     ) -> some WritableConnectionDefinition<EmptyConfiguration, Value> {
@@ -61,12 +55,10 @@ extension ConnectionDefinition where Self == Connections {
 
     /// Creates a read-only connection that always provides the same value.
     ///
-    /// A constant connection doesn't observe changes or accept replacement of
-    /// its value. Constants are also useful for injecting actions represented
-    /// by closures.
+    /// The connection doesn't observe or replace its value. Use it for fixed
+    /// values or actions represented by closures.
     ///
     /// - Parameter value: The value delivered to every connected property.
-    /// - Returns: A read-only constant connection definition.
     public static func constant<WrappedValue>(
         _ value: WrappedValue
     ) -> some ConnectionDefinition<EmptyConfiguration, WrappedValue> {
@@ -77,15 +69,13 @@ extension ConnectionDefinition where Self == Connections {
         }
     }
 
-    /// Creates a writable connection whose local scoped state starts with the
-    /// provided value.
+    /// Creates a writable connection with an initial value for each property.
     ///
     /// Each connected property owns an independent value. The value changes
     /// only when that property is written and resets when its connection
     /// identity is recreated.
     ///
     /// - Parameter initialValue: The value assigned when a connection starts.
-    /// - Returns: A writable connection with property-local state.
     public static func initial<WrappedValue>(
         _ initialValue: WrappedValue
     ) -> some WritableConnectionDefinition<EmptyConfiguration, WrappedValue> {

@@ -5,12 +5,12 @@
 //  Created by Mikhail Apurin on 2026-08-10.
 //
 
-/// An active interface between one scoped property and an external implementation.
+/// The operations that connect a scoped property to its source.
 ///
 /// A connection definition creates a session when ``ScopedState`` resolves it.
-/// The session supplies a synchronous value, optionally observes later updates,
-/// and may accept writes. Its closures can retain any implementation objects
-/// needed for the connection lifetime.
+/// A session supplies an initial value synchronously and can observe updates
+/// and accept writes. Its closures can retain the source for the session's
+/// lifetime.
 ///
 /// ```swift
 /// let count: WritableConnection<Int> = .readWrite {
@@ -33,25 +33,29 @@
         case invalidate
     }
 
-    /// The value installed when observation starts and the observation whose
-    /// ownership transfers to ScopedState for the activation lifetime.
+    /// The initial value and an optional token for cancelling observation.
+    ///
+    /// ScopedState installs `initialValue` and retains `observation` for this activation.
     public typealias Activation = (
         initialValue: Value,
         observation: CancellationToken?
     )
 
-    /// Delivers updates produced after the active lifecycle operation returns.
+    /// Delivers source updates after activation, refresh, or reconfiguration
+    /// returns.
     public typealias Yield = @MainActor (Update) -> Void
 
     /// Starts observation and returns its initial value and observation token.
     public let activate: (@escaping Yield) -> Activation
 
-    /// Optionally refreshes the current value without delivering an update.
+    /// Reads a refreshed value, or returns `nil` when no refresh is needed.
+    /// Return the value directly rather than passing it to the yield closure.
     public let refresh: () -> Value?
 
-    /// Updates the external implementation before starting a new activation.
+    /// Applies a changed configuration before the next activation.
     public let reconfigure: (Configuration) -> Void
 
+    /// Writes a value to the source, or is `nil` if the session has no setter.
     public let setValue: ((Value) -> Void)?
 
     /// Creates a configurable session from its lifecycle operations.
@@ -137,11 +141,11 @@ private extension ConnectionSession {
 }
 
 extension ConnectionSession {
-    /// Creates a configurable session backed by an arbitrary observation token.
+    /// Creates a configurable session with a current-value getter and observation.
     ///
-    /// The session starts observation before reading the current value. Values
-    /// delivered synchronously while observation starts are ignored in favor of
-    /// the subsequent current-value read.
+    /// The session calls `observe` before `currentValue`. It ignores values
+    /// delivered during those calls and uses the getter's result as its initial
+    /// value.
     ///
     /// - Parameters:
     ///   - currentValue: Reads the source's current value synchronously.
@@ -175,8 +179,8 @@ extension ConnectionSession {
 extension ConnectionSession where Configuration == EmptyConfiguration {
     /// Creates an unconfigured session with an initial value and observation.
     ///
-    /// If observation delivers values synchronously while it starts, the last
-    /// such value becomes the activation value.
+    /// If `observe` delivers values before returning, the last one replaces
+    /// `initialValue` in the activation result.
     ///
     /// - Parameters:
     ///   - initialValue: The value used before observation delivers an update.
@@ -206,7 +210,7 @@ extension ConnectionSession where Configuration == EmptyConfiguration {
         )
     }
 
-    /// Creates an unconfigured session backed by an arbitrary observation token.
+    /// Creates an unconfigured session with a current-value getter and observation.
     ///
     /// - Parameters:
     ///   - currentValue: Reads the source's current value synchronously.

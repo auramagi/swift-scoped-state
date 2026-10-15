@@ -7,8 +7,7 @@
 
 import SwiftUI
 
-/// Adapts an externally owned container to the scope type stored in the
-/// environment. The concrete container type does not escape this modifier.
+/// Puts the container's scope in the environment without exposing the container type.
 @MainActor private struct ContainerScopeModifier<Container: AnyObject, Scope>: ViewModifier {
     @ContainerScopeProvider<Container, Scope> private var scope: ScopedStateStorage<Scope>
 
@@ -57,12 +56,11 @@ import SwiftUI
     }
 }
 
-/// Adds root-scope provision to SwiftUI views.
 extension View {
     /// Provides a scope from an externally owned container.
     ///
-    /// Keep the container at a stable identity, commonly with `@State`, and
-    /// select the scope it provides with a key path.
+    /// Select the container's scope with a key path. Keep the container's
+    /// identity stable across view updates, for example by storing it in `@State`.
     ///
     /// ```swift
     /// struct RootView: View {
@@ -76,8 +74,7 @@ extension View {
     /// ```
     ///
     /// - Parameters:
-    ///   - container: The reference-type container that owns the scope
-    ///     implementation.
+    ///   - container: The object that provides the scope.
     ///   - scope: A key path to the scope provided to descendant views.
     /// - Returns: A view that provides the selected scope to its subtree.
     @MainActor public func container<Container: AnyObject, Scope>(

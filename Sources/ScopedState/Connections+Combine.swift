@@ -10,11 +10,10 @@ import Combine
 extension ConnectionDefinition where Self == Connections {
     /// Creates a writable connection to a current-value subject.
     ///
-    /// Values sent by the subject update connected properties, and values
-    /// written through the connection are sent back to the subject.
+    /// The subject updates connected properties. Writes through a property's
+    /// binding call the subject's `send` method.
     ///
     /// - Parameter subject: The subject that supplies and receives values.
-    /// - Returns: A writable Combine-backed connection definition.
     public static func subject<WrappedValue>(
         _ subject: CurrentValueSubject<WrappedValue, Never>
     ) -> some WritableConnectionDefinition<EmptyConfiguration, WrappedValue> {
@@ -28,13 +27,11 @@ extension ConnectionDefinition where Self == Connections {
         return connection.set { subject.send($0) }
     }
 
-    /// Creates a read-only connection that starts with an initial value and
-    /// then receives values from a publisher.
+    /// Creates a read-only publisher connection with an initial value.
     ///
     /// - Parameters:
     ///   - publisher: The publisher that delivers later values.
-    ///   - initialValue: The value available before the publisher delivers.
-    /// - Returns: A read-only Combine-backed connection definition.
+    ///   - initialValue: The value to use until the publisher emits a value.
     public static func publisher<Updates: Publisher, WrappedValue>(
         _ publisher: Updates,
         initialValue: WrappedValue
@@ -48,13 +45,11 @@ extension ConnectionDefinition where Self == Connections {
         }
     }
 
-    /// Creates a read-only connection backed by a publisher and a synchronous
-    /// current-value getter.
+    /// Creates a read-only publisher connection with a current-value getter.
     ///
     /// - Parameters:
     ///   - publisher: The publisher that delivers later values.
     ///   - currentValue: A closure that synchronously reads the latest value.
-    /// - Returns: A read-only Combine-backed connection definition.
     public static func publisher<Updates: Publisher, WrappedValue>(
         _ publisher: Updates,
         currentValue: @escaping () -> WrappedValue
