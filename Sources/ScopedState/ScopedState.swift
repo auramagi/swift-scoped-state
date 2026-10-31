@@ -53,17 +53,9 @@ import SwiftUI
 
         @MainActor struct Context {
             struct ConnectionIdentity: Equatable {
-                let scopeStorage: ScopedStateStorage<Scope>
-
-                let generation: UInt
+                let scope: ScopeSnapshot<Scope>
 
                 let keyPath: AnyKeyPath
-
-                static func == (lhs: ConnectionIdentity, rhs: ConnectionIdentity) -> Bool {
-                    lhs.scopeStorage === rhs.scopeStorage
-                    && lhs.generation == rhs.generation
-                    && lhs.keyPath == rhs.keyPath
-                }
             }
 
             let identity: ConnectionIdentity
@@ -143,19 +135,18 @@ import SwiftUI
         }
 
         func update(
-            scopeStorage: ScopedStateStorage<Scope>,
+            scope: ScopeSnapshot<Scope>,
             source: Source,
             configuration: Configuration,
             valueBehavior: ValueBehavior
         ) {
             let identity = Context.ConnectionIdentity(
-                scopeStorage: scopeStorage,
-                generation: scopeStorage.generation,
+                scope: scope,
                 keyPath: source.keyPath
             )
 
             if context?.identity != identity {
-                let session = source.makeSession(scopeStorage.requiredValue, configuration)
+                let session = source.makeSession(scope.value, configuration)
 
                 context?.sessionObservation?.cancel()
                 let activation = session.activate(
@@ -187,7 +178,7 @@ import SwiftUI
 
     @State private var coordinator = Coordinator(storage: ScopedStateStorage())
 
-    @Environment(ScopedStateStorage<Scope>.self) private var scope
+    @Environment(ScopeSnapshot<Scope>.self) private var scope
 
     private let source: Source
 
@@ -322,7 +313,7 @@ import SwiftUI
     /// directly.
     public func update() {
         coordinator.update(
-            scopeStorage: scope,
+            scope: scope,
             source: source,
             configuration: configuration,
             valueBehavior: valueBehavior
