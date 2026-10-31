@@ -10,13 +10,15 @@ import SwiftUI
 @MainActor private struct ScopeModifier<ParentScope, Configuration: Equatable, Scope>: ViewModifier {
     @ScopedState<ParentScope, Configuration, Scope, ReadOnlyValueProjection<Scope>> private var scope: Scope
 
+    @State private var snapshots = ScopeSnapshot<Scope>.Cache()
+
     init(scope: ScopedState<ParentScope, Configuration, Scope, ReadOnlyValueProjection<Scope>>) {
         self._scope = scope
     }
 
     func body(content: Content) -> some View {
         content
-            .environment(_scope.storage)
+            .environment(snapshots.snapshot(from: _scope.storage))
     }
 }
 

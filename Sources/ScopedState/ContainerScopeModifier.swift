@@ -11,13 +11,15 @@ import SwiftUI
 @MainActor private struct ContainerScopeModifier<Container: AnyObject, Scope>: ViewModifier {
     @ContainerScopeProvider<Container, Scope> private var scope: ScopedStateStorage<Scope>
 
+    @State private var snapshots = ScopeSnapshot<Scope>.Cache()
+
     init(container: Container, scope keyPath: KeyPath<Container, Scope>) {
         self._scope = ContainerScopeProvider(container: container, keyPath: keyPath)
     }
 
     func body(content: Content) -> some View {
         content
-            .environment(scope)
+            .environment(snapshots.snapshot(from: scope))
     }
 }
 
